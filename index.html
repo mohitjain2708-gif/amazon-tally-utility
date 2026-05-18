@@ -8,138 +8,247 @@
   </head>
   <body>
     <main class="app-shell">
-      <header class="topbar">
-        <div>
-          <h1>Amazon Sales to Tally XML</h1>
-          <p>Convert Amazon GST MTR B2B/B2C CSV reports into TallyPrime Sales Voucher import XML.</p>
+      <aside class="side-rail" aria-label="Product navigation">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img">
+              <path d="M7 3.8h8.1L20 8.7V20a1.8 1.8 0 0 1-1.8 1.8H7A1.8 1.8 0 0 1 5.2 20V5.6A1.8 1.8 0 0 1 7 3.8Z"></path>
+              <path d="M14.7 4.1v4.7h4.7"></path>
+              <path d="m8.6 14 2.1 2.1 4.9-5"></path>
+            </svg>
+          </span>
+          <strong>Amazon Sales<br>to Tally XML</strong>
         </div>
-        <div class="status" data-status data-tone="neutral">Upload an Amazon GST MTR CSV to begin.</div>
-      </header>
 
-      <section class="workspace">
+        <nav class="rail-nav">
+          <a class="active" href="#uploadCard">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 11.5 12 4l8 7.5"></path><path d="M6.5 10.5v9h11v-9"></path><path d="M10 19.5v-5h4v5"></path></svg>
+            </span>
+            Dashboard
+          </a>
+          <a href="#previewCard">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M5 5.5h14"></path><path d="M5 12h14"></path><path d="M5 18.5h9"></path></svg>
+            </span>
+            Voucher Preview
+          </a>
+          <a href="#validationCard">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3.8 19 7v5.2c0 4.2-2.9 7.1-7 8.8-4.1-1.7-7-4.6-7-8.8V7l7-3.2Z"></path><path d="m8.8 12.5 2.1 2.1 4.4-4.6"></path></svg>
+            </span>
+            Validation
+          </a>
+          <a href="#settingsPanel">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 8.2a3.8 3.8 0 1 1 0 7.6 3.8 3.8 0 0 1 0-7.6Z"></path><path d="M19 12a7.8 7.8 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.7-1L14.5 3h-5l-.3 3a8 8 0 0 0-1.7 1L5.1 6l-2 3.4 2 1.6a7.8 7.8 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.3 3h5l.3-3a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6c.1-.3.1-.7.1-1Z"></path></svg>
+            </span>
+            Settings
+          </a>
+        </nav>
+
+        <div class="rail-card">
+          <span class="spark" aria-hidden="true">1</span>
+          <span>Upload Amazon CSV</span>
+          <span class="spark" aria-hidden="true">2</span>
+          <span>Validate the vouchers</span>
+          <span class="spark" aria-hidden="true">3</span>
+          <span>Download Tally XML</span>
+        </div>
+
+        <div class="privacy-card">
+          <span class="lock-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M7.5 10V8a4.5 4.5 0 0 1 9 0v2"></path><path d="M6.5 10h11v10h-11z"></path></svg>
+          </span>
+          <strong>Your data stays private</strong>
+          <span>Files are processed in your browser and are never stored.</span>
+        </div>
+      </aside>
+
+      <section class="main-area">
+        <header class="topbar">
+          <div>
+            <h1>Create Tally XML</h1>
+            <p>Convert Amazon GST MTR B2B/B2C reports into TallyPrime-ready Sales Voucher XML.</p>
+          </div>
+          <div class="status" data-status data-tone="neutral">Upload an Amazon GST MTR CSV to begin.</div>
+        </header>
+
+        <section class="progress-strip" aria-label="Import progress">
+          <div class="step active">
+            <span>1</span>
+            <strong>Upload CSV</strong>
+            <small>Amazon report</small>
+          </div>
+          <div class="step-line"></div>
+          <div class="step">
+            <span>2</span>
+            <strong>Validate & Preview</strong>
+            <small>Review vouchers</small>
+          </div>
+          <div class="step-line"></div>
+          <div class="step">
+            <span>3</span>
+            <strong>Download XML</strong>
+            <small>Import in TallyPrime</small>
+          </div>
+        </section>
+
+        <section class="action-bar" aria-label="Primary actions">
+          <button id="processButton" class="primary" type="button" disabled>
+            <span>Validate & Preview</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+          </button>
+          <button id="downloadXml" type="button" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10"></path><path d="m8 10 4 4 4-4"></path><path d="M5 20h14"></path></svg>
+            <span>Download XML</span>
+          </button>
+          <button id="downloadReport" type="button" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5h7l3 3V20H7z"></path><path d="M14 4.5v3h3"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path></svg>
+            <span>Report</span>
+          </button>
+        </section>
+
+        <section class="workspace">
         <form class="panel controls" id="configForm">
-          <div class="panel-title">
-            <h2>Import Setup</h2>
-            <p>Ledger names must already exist in TallyPrime.</p>
+          <div class="setup-grid">
+            <section class="setup-section" id="uploadCard">
+              <div class="panel-title">
+                <span class="section-number">1</span>
+                <div>
+                  <h2>Upload Amazon GST MTR CSV</h2>
+                  <p>Drop the B2B or B2C sales report exported from Amazon.</p>
+                </div>
+              </div>
+
+              <label class="drop-zone" data-drop-zone>
+                <input id="fileInput" type="file" accept=".csv,text/csv">
+                <span class="upload-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 16V6"></path>
+                    <path d="m8.2 9.7 3.8-3.8 3.8 3.8"></path>
+                    <path d="M7.5 16.5h-.8a3.7 3.7 0 0 1 0-7.4 5.3 5.3 0 0 1 10.3-1.3 4.4 4.4 0 0 1 .3 8.7h-.8"></path>
+                  </svg>
+                </span>
+                <strong>Drag & drop your CSV file here</strong>
+                <small>or click to browse</small>
+                <em data-file-name>No file selected</em>
+              </label>
+              <div class="privacy-note">CSV processing runs in this browser. No file is uploaded to the hosting server.</div>
+            </section>
+
+            <section class="setup-section" id="settingsPanel">
+              <div class="panel-title">
+                <span class="section-number">2</span>
+                <div>
+                  <h2>Tally & Ledger Settings</h2>
+                  <p>Confirm the ledgers that already exist in TallyPrime.</p>
+                </div>
+              </div>
+
+              <section class="quick-settings">
+                <label>
+                  <span>Sales ledger</span>
+                  <input name="salesLedgerName" value="Sales A/c" autocomplete="off">
+                </label>
+                <div class="ledger-row">
+                  <label>
+                    <span>B2C party ledger</span>
+                    <input name="partyLedgerName" value="B2C Amazon Sales" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>B2B party ledger</span>
+                    <input name="b2bPartyLedgerName" value="B2B Amazon Sales" autocomplete="off">
+                  </label>
+                </div>
+              </section>
+
+              <details class="advanced">
+                <summary>Advanced Tally settings</summary>
+                <div class="field-grid">
+                  <label>
+                    <span>Voucher type</span>
+                    <input name="voucherType" value="Sales - Amazon" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Invoice suffix</span>
+                    <input name="invoiceSuffix" value="/A" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Default unit</span>
+                    <input name="unitName" value="Pcs" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Round off ledger</span>
+                    <input name="roundOffLedgerName" value="Round Off" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>CGST ledger</span>
+                    <input name="cgstLedgerName" value="CGST" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>SGST ledger</span>
+                    <input name="sgstLedgerName" value="SGST" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>IGST ledger</span>
+                    <input name="igstLedgerName" value="IGST" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Party ledger mode</span>
+                    <select name="partyLedgerMode">
+                      <option value="auto" selected>Auto: B2B/B2C default ledgers</option>
+                      <option value="buyer">Buyer name / GSTIN</option>
+                      <option value="single">Single Amazon customer ledger</option>
+                      <option value="state">State-wise Amazon B2C ledger</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Party ledger prefix</span>
+                    <input name="partyLedgerPrefix" value="Amazon B2C" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Stock item name</span>
+                    <select name="stockNameMode">
+                      <option value="description" selected>Product description/name</option>
+                      <option value="sku">SKU, fallback to ASIN/name</option>
+                      <option value="sku-description">SKU + item description</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Company name</span>
+                    <input name="companyName" placeholder="Leave blank to use the company open in Tally" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>GST registration</span>
+                    <input name="gstRegistrationName" value="Delhi Registration" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Company GST state</span>
+                    <input name="companyGstState" value="Delhi" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Godown pattern</span>
+                    <input name="godownPattern" value="Amazon - MCIE ({warehouse})" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Batch name</span>
+                    <input name="batchName" placeholder="Leave blank if not batch-wise" autocomplete="off">
+                  </label>
+                </div>
+
+                <label class="check-row advanced-check">
+                  <input type="checkbox" name="includeBillAllocations" checked>
+                  <span>Add bill allocation with invoice number</span>
+                </label>
+
+                <label class="stacked">
+                  <span>SKU / ASIN to Tally stock item mapping</span>
+                  <textarea name="stockMapText" rows="5" placeholder="35-H12E-2ZVG = Samsung S24 FE 5G 8/128 - Fresh&#10;B0DHL7YT5S = Samsung S24 FE 5G 8/128 - Fresh"></textarea>
+                </label>
+              </details>
+            </section>
           </div>
-
-          <label class="drop-zone" data-drop-zone>
-            <input id="fileInput" type="file" accept=".csv,text/csv">
-            <span class="upload-icon">CSV</span>
-            <strong>Drop Amazon report here</strong>
-            <small data-file-name>No file selected</small>
-          </label>
-          <div class="privacy-note">CSV processing runs in this browser. No file is uploaded to the hosting server.</div>
-
-          <div class="actions primary-actions">
-            <button id="processButton" class="primary" type="button" disabled>Validate & Preview</button>
-            <button id="downloadXml" type="button" disabled>Download XML</button>
-            <button id="downloadReport" type="button" disabled>Download Report</button>
-          </div>
-
-          <section class="quick-settings">
-            <div class="section-heading">
-              <h3>Tally Ledgers</h3>
-              <p>Confirm only if ledger names differ in TallyPrime.</p>
-            </div>
-            <label>
-              <span>Sales ledger</span>
-              <input name="salesLedgerName" value="Sales A/c" autocomplete="off">
-            </label>
-            <label>
-              <span>B2C party ledger</span>
-              <input name="partyLedgerName" value="B2C Amazon Sales" autocomplete="off">
-            </label>
-            <label>
-              <span>B2B party ledger</span>
-              <input name="b2bPartyLedgerName" value="B2B Amazon Sales" autocomplete="off">
-            </label>
-          </section>
-
-          <details class="advanced">
-            <summary>Technical XML settings</summary>
-            <div class="field-grid">
-              <label>
-                <span>Voucher type</span>
-                <input name="voucherType" value="Sales - Amazon" autocomplete="off">
-              </label>
-              <label>
-                <span>Invoice suffix</span>
-                <input name="invoiceSuffix" value="/A" autocomplete="off">
-              </label>
-              <label>
-                <span>Default unit</span>
-                <input name="unitName" value="Pcs" autocomplete="off">
-              </label>
-              <label>
-                <span>Round off ledger</span>
-                <input name="roundOffLedgerName" value="Round Off" autocomplete="off">
-              </label>
-              <label>
-                <span>CGST ledger</span>
-                <input name="cgstLedgerName" value="CGST" autocomplete="off">
-              </label>
-              <label>
-                <span>SGST ledger</span>
-                <input name="sgstLedgerName" value="SGST" autocomplete="off">
-              </label>
-              <label>
-                <span>IGST ledger</span>
-                <input name="igstLedgerName" value="IGST" autocomplete="off">
-              </label>
-              <label>
-                <span>Party ledger mode</span>
-                <select name="partyLedgerMode">
-                  <option value="auto" selected>Auto: B2B/B2C default ledgers</option>
-                  <option value="buyer">Buyer name / GSTIN</option>
-                  <option value="single">Single Amazon customer ledger</option>
-                  <option value="state">State-wise Amazon B2C ledger</option>
-                </select>
-              </label>
-              <label>
-                <span>Party ledger prefix</span>
-                <input name="partyLedgerPrefix" value="Amazon B2C" autocomplete="off">
-              </label>
-              <label>
-                <span>Stock item name</span>
-                <select name="stockNameMode">
-                  <option value="description" selected>Product description/name</option>
-                  <option value="sku">SKU, fallback to ASIN/name</option>
-                  <option value="sku-description">SKU + item description</option>
-                </select>
-              </label>
-              <label>
-                <span>Company name</span>
-                <input name="companyName" placeholder="Leave blank to use the company open in Tally" autocomplete="off">
-              </label>
-              <label>
-                <span>GST registration</span>
-                <input name="gstRegistrationName" value="Delhi Registration" autocomplete="off">
-              </label>
-              <label>
-                <span>Company GST state</span>
-                <input name="companyGstState" value="Delhi" autocomplete="off">
-              </label>
-              <label>
-                <span>Godown pattern</span>
-                <input name="godownPattern" value="Amazon - MCIE ({warehouse})" autocomplete="off">
-              </label>
-              <label>
-                <span>Batch name</span>
-                <input name="batchName" placeholder="Leave blank if not batch-wise" autocomplete="off">
-              </label>
-            </div>
-
-            <label class="check-row advanced-check">
-              <input type="checkbox" name="includeBillAllocations" checked>
-              <span>Add bill allocation with invoice number</span>
-            </label>
-
-            <label class="stacked">
-              <span>SKU / ASIN to Tally stock item mapping</span>
-              <textarea name="stockMapText" rows="5" placeholder="35-H12E-2ZVG = Samsung S24 FE 5G 8/128 - Fresh&#10;B0DHL7YT5S = Samsung S24 FE 5G 8/128 - Fresh"></textarea>
-            </label>
-          </details>
 
           <details class="advanced trainer-panel">
             <summary>Learn mappings from historical data</summary>
@@ -164,12 +273,38 @@
         </form>
 
         <section class="results">
-          <div class="metrics" data-summary></div>
-
-          <div class="panel">
+          <aside class="panel summary-panel">
             <div class="panel-title">
-              <h2>Voucher Preview</h2>
-              <p>First 100 generated Sales vouchers.</p>
+              <h2>Summary</h2>
+              <p>Updated after validation.</p>
+            </div>
+            <div class="metrics" data-summary>
+              <div class="metric">
+                <span>Total transactions</span>
+                <strong>0</strong>
+              </div>
+              <div class="metric">
+                <span>Sales vouchers</span>
+                <strong>0</strong>
+              </div>
+              <div class="metric">
+                <span>Issues found</span>
+                <strong>0</strong>
+              </div>
+              <div class="metric">
+                <span>Invoice total</span>
+                <strong>0.00</strong>
+              </div>
+            </div>
+          </aside>
+
+          <div class="panel preview-panel" id="previewCard">
+            <div class="panel-title">
+              <div>
+                <h2>Voucher Preview</h2>
+                <p>First 100 generated Sales vouchers.</p>
+              </div>
+              <span class="soft-count">Review before import</span>
             </div>
             <div class="table-wrap">
               <table>
@@ -196,10 +331,12 @@
             </div>
           </div>
 
-          <div class="panel">
+          <div class="panel validation-panel" id="validationCard">
             <div class="panel-title">
-              <h2>Validation Log</h2>
-              <p>Errors block XML generation. Warnings are included in the downloadable report.</p>
+              <div>
+                <h2>Validation Log</h2>
+                <p>Errors block XML generation. Warnings are included in the report.</p>
+              </div>
             </div>
             <div class="table-wrap">
               <table>

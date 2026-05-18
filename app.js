@@ -27,6 +27,17 @@ function setStatus(message, tone = "neutral") {
   els.status.dataset.tone = tone;
 }
 
+function renderEmptyState() {
+  els.summary.innerHTML = `
+    <div class="metric"><span>Total transactions</span><strong>0</strong></div>
+    <div class="metric"><span>Sales vouchers</span><strong>0</strong></div>
+    <div class="metric"><span>Issues found</span><strong>0</strong></div>
+    <div class="metric"><span>Invoice total</span><strong>0.00</strong></div>
+  `;
+  els.previewBody.innerHTML = '<tr><td colspan="12" class="empty">Upload a CSV and validate it to see voucher details here.</td></tr>';
+  els.issuesBody.innerHTML = '<tr><td colspan="4" class="empty">Validation messages will appear here after preview.</td></tr>';
+}
+
 function readConfig() {
   const formData = new FormData(els.configForm);
   return {
@@ -57,12 +68,11 @@ function selectFile(file) {
   currentFile = file;
   currentResult = null;
   els.fileName.textContent = file ? file.name : "No file selected";
+  els.dropZone.classList.toggle("has-file", Boolean(file));
   els.processButton.disabled = !file;
   els.xmlButton.disabled = true;
   els.reportButton.disabled = true;
-  els.summary.innerHTML = "";
-  els.previewBody.innerHTML = "";
-  els.issuesBody.innerHTML = "";
+  renderEmptyState();
   setStatus(file ? "Ready to validate and generate preview." : "Upload an Amazon GST MTR CSV to begin.");
 }
 
@@ -122,16 +132,11 @@ function renderLearningSummary(result) {
   `;
 }
 
-function renderSummary(summary) {
+function renderSummary(summary, errors = [], warnings = []) {
   const cards = [
-    ["Rows", summary.totalRows],
+    ["Total transactions", summary.totalRows],
     ["Sales vouchers", summary.voucherCount],
-    ["Shipment rows", summary.shipmentRows],
-    ["Skipped", summary.skippedRows],
-    ["Taxable", AmazonTallyConverter.formatAmount(summary.taxableTotal)],
-    ["CGST", AmazonTallyConverter.formatAmount(summary.cgstTotal)],
-    ["SGST", AmazonTallyConverter.formatAmount(summary.sgstTotal)],
-    ["IGST", AmazonTallyConverter.formatAmount(summary.igstTotal)],
+    ["Issues found", errors.length + warnings.length],
     ["Invoice total", AmazonTallyConverter.formatAmount(summary.invoiceTotal)],
   ];
 
@@ -141,7 +146,8 @@ function renderSummary(summary) {
 }
 
 function renderPreview(rows) {
-  els.previewBody.innerHTML = rows
+  els.previewBody.innerHTML = rows.length
+    ? rows
     .slice(0, 100)
     .map(
       (row) => `
@@ -161,7 +167,8 @@ function renderPreview(rows) {
         </tr>
       `
     )
-    .join("");
+    .join("")
+    : '<tr><td colspan="12" class="empty">No vouchers were generated from this file.</td></tr>';
 }
 
 function renderIssues(errors, warnings) {
@@ -199,7 +206,7 @@ function processFile() {
   reader.onload = () => {
     try {
       currentResult = AmazonTallyConverter.convertCsvText(String(reader.result), readConfig());
-      renderSummary(currentResult.summary);
+      renderSummary(currentResult.summary, currentResult.errors, currentResult.warnings);
       renderPreview(currentResult.preview);
       renderIssues(currentResult.errors, currentResult.warnings);
 
@@ -304,3 +311,4 @@ if (window.AMAZON_TALLY_LEARNED_MAPPING) {
 }
 
 setStatus("Upload an Amazon GST MTR CSV to begin.");
+renderEmptyState();
