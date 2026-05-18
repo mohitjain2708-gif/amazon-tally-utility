@@ -1,0 +1,15 @@
+output/
+output-b2b/
+output-b2c-retest/
+tally-test-output/
+learned-output/
+
+*.csv
+*.xlsx
+*.xls
+*.xml
+
+.vercel/
+node_modules/
+
+.vercel

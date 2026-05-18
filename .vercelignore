@@ -1,0 +1,16 @@
+output/
+output-b2b/
+output-b2c-retest/
+tally-test-output/
+learned-output/
+
+*.csv
+*.xlsx
+*.xls
+*.xml
+
+analyze-history.js
+cli.js
+static-server.js
+tally-smoke-test.js
+README.md
