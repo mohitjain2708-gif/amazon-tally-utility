@@ -1,7 +1,11 @@
 const els = {
   dropZone: document.querySelector("[data-drop-zone]"),
+  pdfDropZone: document.querySelector("[data-pdf-drop-zone]"),
   fileInput: document.querySelector("#fileInput"),
+  pdfZipInput: document.querySelector("#pdfZipInput"),
   fileName: document.querySelector("[data-file-name]"),
+  pdfFileName: document.querySelector("[data-pdf-file-name]"),
+  pdfSummary: document.querySelector("[data-pdf-summary]"),
   processButton: document.querySelector("#processButton"),
   status: document.querySelector("[data-status]"),
   summary: document.querySelector("[data-summary]"),
@@ -19,6 +23,8 @@ const els = {
 };
 
 let currentFile = null;
+let currentPdfFiles = [];
+let currentAddressIndex = null;
 let currentResult = null;
 let currentLearnedMapping = null;
 
@@ -32,10 +38,11 @@ function renderEmptyState() {
     <div class="metric"><span>Total transactions</span><strong>0</strong></div>
     <div class="metric"><span>Sales vouchers</span><strong>0</strong></div>
     <div class="metric"><span>Refund vouchers</span><strong>0</strong></div>
+    <div class="metric"><span>PDF addresses</span><strong>0</strong></div>
     <div class="metric"><span>Issues found</span><strong>0</strong></div>
     <div class="metric"><span>Net total</span><strong>0.00</strong></div>
   `;
-  els.previewBody.innerHTML = '<tr><td colspan="13" class="empty">Upload a CSV and validate it to see voucher details here.</td></tr>';
+  els.previewBody.innerHTML = '<tr><td colspan="14" class="empty">Upload a CSV and validate it to see voucher details here.</td></tr>';
   els.issuesBody.innerHTML = '<tr><td colspan="4" class="empty">Validation messages will appear here after preview.</td></tr>';
 }
 
@@ -76,6 +83,21 @@ function selectFile(file) {
   els.reportButton.disabled = true;
   renderEmptyState();
   setStatus(file ? "Ready to validate and generate preview." : "Upload an Amazon GST MTR CSV to begin.");
+}
+
+function selectPdfFiles(files) {
+  currentPdfFiles = Array.from(files || []).filter((file) => /\.zip$/i.test(file.name));
+  currentAddressIndex = null;
+  els.pdfFileName.textContent = currentPdfFiles.length
+    ? `${currentPdfFiles.length} ZIP file${currentPdfFiles.length === 1 ? "" : "s"} selected`
+    : "No ZIP selected";
+  els.pdfDropZone.classList.toggle("has-file", currentPdfFiles.length > 0);
+  els.pdfSummary.textContent = currentPdfFiles.length
+    ? "Invoice PDFs will be parsed during validation and merged by invoice/order number."
+    : "PDF extraction runs locally in this browser before XML generation.";
+  currentResult = null;
+  els.xmlButton.disabled = true;
+  els.reportButton.disabled = true;
 }
 
 function downloadText(filename, content, mimeType) {
@@ -140,6 +162,7 @@ function renderSummary(summary, errors = [], warnings = []) {
     ["Total transactions", summary.totalRows],
     ["Sales vouchers", summary.salesVoucherCount ?? summary.voucherCount],
     ["Refund vouchers", summary.refundVoucherCount || 0],
+    ["PDF addresses", summary.pdfAddressVoucherCount || 0],
     ["Issues found", errors.length + warnings.length],
     ["Net total", AmazonTallyConverter.formatAmount(summary.invoiceTotal)],
   ];
@@ -163,6 +186,7 @@ function renderPreview(rows) {
           <td>${escapeHtml(row.partyLedger)}</td>
           <td>${escapeHtml(row.gstin)}</td>
           <td class="item-cell" title="${escapeHtml(row.amazonDescriptions || "No Amazon product description available")}">${escapeHtml(row.tallyItems)}</td>
+          <td><span class="pill ${row.addressSource === "PDF" ? "good" : "warn"}" title="${escapeHtml(row.addressPdfFile || "CSV fallback address")}">${escapeHtml(row.addressSource || "CSV")}</span></td>
           <td class="num">${row.items}</td>
           <td class="num">${row.taxable}</td>
           <td class="num">${row.cgst}</td>
@@ -173,7 +197,7 @@ function renderPreview(rows) {
       `
     )
     .join("")
-    : '<tr><td colspan="13" class="empty">No vouchers were generated from this file.</td></tr>';
+    : '<tr><td colspan="14" class="empty">No vouchers were generated from this file.</td></tr>';
 }
 
 function renderIssues(errors, warnings) {
@@ -203,42 +227,53 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-function processFile() {
+async function ensureAddressIndex() {
+  if (!currentPdfFiles.length) return null;
+  if (currentAddressIndex) return currentAddressIndex;
+  if (!window.AmazonTallyPdfAddresses) throw new Error("PDF address parser is not available.");
+
+  currentAddressIndex = await AmazonTallyPdfAddresses.extractFromZipFiles(currentPdfFiles, ({ processed, total }) => {
+    setStatus(`Reading invoice PDFs ${processed}/${total}...`);
+    els.pdfSummary.textContent = `Parsed ${processed} of ${total} PDF invoice files.`;
+  });
+  const summary = currentAddressIndex.summary;
+  els.pdfSummary.textContent = `${summary.parsedPdfCount} PDF invoice(s) parsed from ${summary.zipCount} ZIP file(s). ${summary.missingAddressCount} PDF(s) need address review.`;
+  return currentAddressIndex;
+}
+
+async function processFile() {
   if (!currentFile) return;
-  const reader = new FileReader();
-  setStatus("Reading file...");
+  try {
+    setStatus("Reading CSV file...");
+    els.processButton.disabled = true;
+    const [csvText, addressIndex] = await Promise.all([readFileAsText(currentFile), ensureAddressIndex()]);
+    const config = readConfig();
+    if (addressIndex) config.addressIndex = addressIndex;
+    currentResult = AmazonTallyConverter.convertCsvText(csvText, config);
+    renderSummary(currentResult.summary, currentResult.errors, currentResult.warnings);
+    renderPreview(currentResult.preview);
+    renderIssues(currentResult.errors, currentResult.warnings);
 
-  reader.onload = () => {
-    try {
-      currentResult = AmazonTallyConverter.convertCsvText(String(reader.result), readConfig());
-      renderSummary(currentResult.summary, currentResult.errors, currentResult.warnings);
-      renderPreview(currentResult.preview);
-      renderIssues(currentResult.errors, currentResult.warnings);
-
-      const hasErrors = currentResult.errors.length > 0;
-      els.xmlButton.disabled = hasErrors || !currentResult.xml;
-      els.reportButton.disabled = !currentResult.reportCsv;
-      setStatus(
-        hasErrors
-          ? `Found ${currentResult.errors.length} error(s). Fix them before importing into Tally.`
-          : `Generated ${currentResult.summary.voucherCount} voucher(s), including ${currentResult.summary.refundVoucherCount || 0} refund voucher(s). Review the preview, then download XML.`,
-        hasErrors ? "bad" : "good"
-      );
-    } catch (error) {
-      setStatus(`Could not process file: ${error.message}`, "bad");
-      els.xmlButton.disabled = true;
-      els.reportButton.disabled = true;
-    }
-  };
-
-  reader.onerror = () => {
-    setStatus("Could not read the selected file.", "bad");
-  };
-
-  reader.readAsText(currentFile);
+    const hasErrors = currentResult.errors.length > 0;
+    els.xmlButton.disabled = hasErrors || !currentResult.xml;
+    els.reportButton.disabled = !currentResult.reportCsv;
+    setStatus(
+      hasErrors
+        ? `Found ${currentResult.errors.length} error(s). Fix them before importing into Tally.`
+        : `Generated ${currentResult.summary.voucherCount} voucher(s), including ${currentResult.summary.refundVoucherCount || 0} refund voucher(s), with ${currentResult.summary.pdfAddressVoucherCount || 0} PDF address match(es).`,
+      hasErrors ? "bad" : "good"
+    );
+  } catch (error) {
+    setStatus(`Could not process file: ${error.message}`, "bad");
+    els.xmlButton.disabled = true;
+    els.reportButton.disabled = true;
+  } finally {
+    els.processButton.disabled = !currentFile;
+  }
 }
 
 els.fileInput.addEventListener("change", (event) => selectFile(event.target.files[0]));
+els.pdfZipInput.addEventListener("change", (event) => selectPdfFiles(event.target.files));
 els.processButton.addEventListener("click", processFile);
 
 els.dropZone.addEventListener("dragover", (event) => {
@@ -255,6 +290,21 @@ els.dropZone.addEventListener("drop", (event) => {
   els.dropZone.classList.remove("dragging");
   const [file] = event.dataTransfer.files;
   if (file) selectFile(file);
+});
+
+els.pdfDropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  els.pdfDropZone.classList.add("dragging");
+});
+
+els.pdfDropZone.addEventListener("dragleave", () => {
+  els.pdfDropZone.classList.remove("dragging");
+});
+
+els.pdfDropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  els.pdfDropZone.classList.remove("dragging");
+  if (event.dataTransfer.files.length) selectPdfFiles(event.dataTransfer.files);
 });
 
 els.xmlButton.addEventListener("click", () => {

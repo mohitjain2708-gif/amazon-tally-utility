@@ -217,6 +217,44 @@
     return country;
   }
 
+  function normalizeLookupKey(value) {
+    return String(value || "").trim().toUpperCase();
+  }
+
+  function hasAddressIndex(config) {
+    return Boolean(config.addressIndex && (config.addressIndex.byInvoice || config.addressIndex.byOrder));
+  }
+
+  function findPdfAddress(record, config, refund) {
+    const index = config.addressIndex || {};
+    const byInvoice = index.byInvoice || {};
+    const byOrder = index.byOrder || {};
+    const sourceInvoiceNo = String(record["Invoice Number"] || "").trim();
+    const creditNoteNo = String(record["Credit Note No"] || "").trim();
+    const orderId = String(record["Order Id"] || "").trim();
+    const invoiceCandidates = refund ? [sourceInvoiceNo, creditNoteNo] : [sourceInvoiceNo];
+    for (const candidate of invoiceCandidates) {
+      const found = byInvoice[normalizeLookupKey(candidate)];
+      if (found) return found;
+    }
+    const orderMatches = byOrder[normalizeLookupKey(orderId)];
+    return orderMatches && orderMatches.length ? orderMatches[0] : null;
+  }
+
+  function fallbackBillAddressLines(voucher) {
+    return [
+      voucher.buyerName || voucher.partyLedger,
+      voucher.billToCity,
+      voucher.billToState,
+      voucher.billToCountry,
+      voucher.billToPostalCode,
+    ];
+  }
+
+  function fallbackShipAddressLines(voucher) {
+    return [voucher.shipToCity, voucher.shipToState, voucher.shipToCountry, voucher.shipToPostalCode];
+  }
+
   function buildPartyLedger(record, config) {
     const buyerName = String(record["Buyer Name"] || "").trim();
     const buyerGstin = String(record["Customer Bill To Gstid"] || record["Customer Ship To Gstid"] || "").trim();
@@ -331,6 +369,7 @@
       const igstRate = parseRate(record["Igst Rate"]);
       const stockName = buildStockName(record, config);
       const partyLedger = buildPartyLedger(record, config);
+      const pdfAddress = findPdfAddress(record, config, refund);
       const lineKey = [
         invoiceNo,
         String(record["Order Id"] || "").trim(),
@@ -340,13 +379,14 @@
         String(record["Total Tax Amount"] || "").trim(),
         String(record["Invoice Amount"] || "").trim(),
       ].join("\u001f");
-      const buyerName = String(record["Buyer Name"] || "").trim();
-      const billToGstin = String(record["Customer Bill To Gstid"] || "").trim();
-      const shipToGstin = String(record["Customer Ship To Gstid"] || "").trim();
+      const buyerName = String(record["Buyer Name"] || "").trim() || pdfAddress?.billingName || "";
+      const billToGstin = String(record["Customer Bill To Gstid"] || "").trim() || pdfAddress?.billingGstin || "";
+      const shipToGstin = String(record["Customer Ship To Gstid"] || "").trim() || pdfAddress?.shippingGstin || "";
       const billToCity = String(record["Bill To City"] || "").trim();
       const billToState = titleCaseState(record["Bill To State"]);
       const billToCountry = tallyCountry(record["Bill To Country"]);
-      const billToPostalCode = String(record["Bill To Postalcode"] || "").trim();
+      const billToPostalCode = String(record["Bill To Postalcode"] || "").trim() || pdfAddress?.billingPostalCode || "";
+      const shipToPostalCode = String(record["Ship To Postal Code"] || "").trim() || pdfAddress?.shippingPostalCode || "";
       const isB2b = Boolean(buyerName || billToGstin || shipToGstin);
 
       if (!invoiceNo) errors.push({ row, invoiceNo, severity: "Error", message: refund ? "Missing credit note number." : "Missing invoice number." });
@@ -360,6 +400,22 @@
       if (cgst > 0 && !config.cgstLedgerName) errors.push({ row, invoiceNo, severity: "Error", message: "CGST ledger is required." });
       if (sgst > 0 && !config.sgstLedgerName) errors.push({ row, invoiceNo, severity: "Error", message: "SGST ledger is required." });
       if (igst > 0 && !config.igstLedgerName) errors.push({ row, invoiceNo, severity: "Error", message: "IGST ledger is required." });
+      if (hasAddressIndex(config) && !pdfAddress) {
+        warnings.push({
+          row,
+          invoiceNo,
+          severity: "Warning",
+          message: `No matching Amazon invoice PDF found for ${refund ? "refund/original invoice" : "invoice"} address enrichment.`,
+        });
+      }
+      if (pdfAddress && (!pdfAddress.hasBillingAddress || !pdfAddress.hasShippingAddress)) {
+        warnings.push({
+          row,
+          invoiceNo,
+          severity: "Warning",
+          message: "Matching PDF found, but complete Bill To / Ship To address block was not detected.",
+        });
+      }
 
       const computedTotal = round2(taxable + tax);
       if (Math.abs(computedTotal - round2(invoiceAmount)) > 0.05) {
@@ -405,11 +461,17 @@
         billToState: billToState || titleCaseState(record["Ship To State"]),
         billToCountry,
         billToPostalCode: billToPostalCode || String(record["Ship To Postal Code"] || "").trim(),
-        placeOfSupply: titleCaseState(record["Ship To State"]),
+        placeOfSupply: titleCaseState(pdfAddress?.placeOfSupply || record["Ship To State"]),
         shipToCity: String(record["Ship To City"] || "").trim(),
-        shipToState: titleCaseState(record["Ship To State"]),
+        shipToState: titleCaseState(pdfAddress?.placeOfDelivery || record["Ship To State"]),
         shipToCountry: tallyCountry(record["Ship To Country"]),
-        shipToPostalCode: String(record["Ship To Postal Code"] || "").trim(),
+        shipToPostalCode,
+        billToName: pdfAddress?.billingName || buyerName || "",
+        shipToName: pdfAddress?.shippingName || buyerName || "",
+        billToAddressLines: pdfAddress?.billingAddressLines || [],
+        shipToAddressLines: pdfAddress?.shippingAddressLines || [],
+        addressSource: pdfAddress ? "PDF" : "CSV",
+        addressPdfFile: pdfAddress?.fileName || "",
         sellerGstin: String(record["Seller Gstin"] || "").trim(),
         hsn: String(record["Hsn/sac"] || "").trim(),
         sku: String(record.Sku || "").trim(),
@@ -494,6 +556,12 @@
         shipToState: first.shipToState,
         shipToCountry: first.shipToCountry,
         shipToPostalCode: first.shipToPostalCode,
+        billToName: first.billToName,
+        shipToName: first.shipToName,
+        billToAddressLines: first.billToAddressLines,
+        shipToAddressLines: first.shipToAddressLines,
+        addressSource: first.addressSource,
+        addressPdfFile: first.addressPdfFile,
         taxableTotal,
         cgstTotal,
         sgstTotal,
@@ -523,6 +591,7 @@
       igstTotal: round2(vouchers.reduce((sum, voucher) => sum + signed(voucher, voucher.igstTotal), 0)),
       invoiceTotal: round2(vouchers.reduce((sum, voucher) => sum + signed(voucher, voucher.invoiceTotal), 0)),
       refundTotal: round2(vouchers.filter((voucher) => voucher.isCreditNote).reduce((sum, voucher) => sum + voucher.invoiceTotal, 0)),
+      pdfAddressVoucherCount: vouchers.filter((voucher) => voucher.addressSource === "PDF").length,
     };
 
     return { config, vouchers, errors, warnings, summary };
@@ -662,14 +731,14 @@
       ...xmlList(
         "ADDRESS.LIST",
         "ADDRESS",
-        [voucher.partyLedger, voucher.billToCity, voucher.billToState, voucher.billToCountry, voucher.billToPostalCode],
+        voucher.billToAddressLines && voucher.billToAddressLines.length ? voucher.billToAddressLines : fallbackBillAddressLines(voucher),
         10,
         'TYPE="String"'
       ),
       ...xmlList(
         "BASICBUYERADDRESS.LIST",
         "BASICBUYERADDRESS",
-        [voucher.buyerName || voucher.partyLedger, voucher.partyLedger, voucher.billToCity, voucher.billToState, voucher.billToCountry, voucher.billToPostalCode],
+        voucher.billToAddressLines && voucher.billToAddressLines.length ? voucher.billToAddressLines : fallbackBillAddressLines(voucher),
         10,
         'TYPE="String"'
       ),
@@ -707,13 +776,13 @@
       xmlTag("VCHENTRYMODE", "Item Invoice", 10),
       xmlTag("EFFECTIVEDATE", voucher.invoiceDate, 10),
       xmlTag("ISINVOICE", "Yes", 10),
-      xmlTag("BASICBUYERNAME", voucher.buyerName || voucher.partyLedger, 10),
-      xmlTag("CONSIGNEEMAILINGNAME", voucher.partyLedger, 10),
+      xmlTag("BASICBUYERNAME", voucher.billToName || voucher.buyerName || voucher.partyLedger, 10),
+      xmlTag("CONSIGNEEMAILINGNAME", voucher.shipToName || voucher.partyLedger, 10),
       xmlTag("CONSIGNEECOUNTRYNAME", voucher.shipToCountry || "India", 10),
       ...xmlList(
         "CONSIGNEEADDRESS.LIST",
         "CONSIGNEEADDRESS",
-        [voucher.shipToCity, voucher.shipToState, voucher.shipToCountry, voucher.shipToPostalCode],
+        voucher.shipToAddressLines && voucher.shipToAddressLines.length ? voucher.shipToAddressLines : fallbackShipAddressLines(voucher),
         10,
         'TYPE="String"'
       ),
@@ -821,6 +890,8 @@
       gstin: voucher.billToGstin || voucher.shipToGstin || "",
       tallyItems: voucher.lines.map((line) => line.stockName).join(" | "),
       amazonDescriptions: voucher.lines.map((line) => line.itemDescription).filter(Boolean).join(" | "),
+      addressSource: voucher.addressSource || "CSV",
+      addressPdfFile: voucher.addressPdfFile || "",
       items: voucher.lines.length,
       taxable: formatAmount(voucher.taxableTotal),
       cgst: formatAmount(voucher.cgstTotal),

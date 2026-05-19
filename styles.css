@@ -749,7 +749,7 @@ button:disabled {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(5, minmax(105px, 1fr));
+  grid-template-columns: repeat(6, minmax(96px, 1fr));
   gap: 10px;
   padding: 0 18px 18px;
 }
@@ -867,6 +867,11 @@ th.num {
 .pill.warn {
   color: var(--amber);
   background: var(--amber-soft);
+}
+
+.pill.good {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 
 .pill.bad {

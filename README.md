@@ -1,20 +1,21 @@
 # Amazon Sales to Tally XML Utility
 
-This is a local browser utility for converting Amazon GST MTR B2B/B2C CSV reports into TallyPrime Sales Voucher XML.
+This is a browser utility for converting Amazon GST MTR B2B/B2C CSV reports into TallyPrime Sales Voucher XML. It can also read Amazon Bulk Invoice ZIP files to enrich vouchers with complete Bill To and Ship To addresses from the invoice PDFs.
 
 ## How to Use
 
-1. Run `node static-server.js 59231`.
+1. Serve the folder locally, for example `python -m http.server 59231`.
 2. Open `http://127.0.0.1:59231/` in a browser.
 3. Upload the Amazon GST MTR CSV report.
-4. Confirm Tally ledger names and SKU-to-stock-item mappings.
-5. Click `Validate & Preview`.
-6. Download `amazon-sales-tally.xml`.
-7. In TallyPrime, import it as transaction XML under `Import > Transactions`.
+4. Upload one or more Amazon Bulk Invoice ZIP files if full addresses are required.
+5. Confirm Tally ledger names and SKU-to-stock-item mappings.
+6. Click `Validate & Preview`.
+7. Download `amazon-sales-tally.xml`.
+8. In TallyPrime, import it as transaction XML under `Import > Transactions`.
 
 ## Public Hosting on Vercel
 
-This app is a static browser utility. The CSV is processed in the user's browser, and the generated XML is downloaded locally.
+This app is a static browser utility. CSV, ZIP, and PDF invoice files are processed in the user's browser, and the generated XML is downloaded locally.
 
 Recommended Vercel setup:
 
@@ -37,6 +38,7 @@ Important for public trials:
 ## Current Scope
 
 - Source formats: Amazon GST MTR B2C CSV and B2B CSV.
+- Optional address source: Amazon Bulk Invoice ZIP files containing invoice PDFs.
 - Voucher type generated: Sales.
 - Included rows: `Transaction Type = Shipment` and `Transaction Type = Refund`.
 - Refund rows are generated as Tally `Amazon Cr. Note` vouchers by default, using Amazon `Credit Note No` as voucher number and the original invoice number as reference.
@@ -44,6 +46,7 @@ Important for public trials:
 - Party ledger can be auto-detected: B2B uses `B2B Amazon Sales`, B2C uses `B2C Amazon Sales`.
 - Sales ledger is selected by the user and applied to every inventory allocation.
 - B2B buyer name and GSTIN are still written into buyer/consignee/GST fields where available.
+- When matching invoice PDFs are uploaded, PDF Bill To and Ship To address blocks override the incomplete CSV address fields in the generated XML.
 
 ## Tally Notes
 

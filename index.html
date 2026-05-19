@@ -51,7 +51,7 @@
           <span class="spark" aria-hidden="true">1</span>
           <span>Upload Amazon CSV</span>
           <span class="spark" aria-hidden="true">2</span>
-          <span>Validate the vouchers</span>
+          <span>Add invoice PDFs</span>
           <span class="spark" aria-hidden="true">3</span>
           <span>Download Tally XML</span>
         </div>
@@ -69,7 +69,7 @@
         <header class="topbar">
           <div>
             <h1>Create Tally XML</h1>
-            <p>Convert Amazon GST MTR B2B/B2C reports into TallyPrime-ready Sales Voucher XML.</p>
+            <p>Convert Amazon GST MTR reports and invoice PDFs into TallyPrime-ready Sales Voucher XML.</p>
           </div>
           <div class="status" data-status data-tone="neutral">Upload an Amazon GST MTR CSV to begin.</div>
         </header>
@@ -83,12 +83,18 @@
           <div class="step-line"></div>
           <div class="step">
             <span>2</span>
+            <strong>Add PDFs</strong>
+            <small>Full addresses</small>
+          </div>
+          <div class="step-line"></div>
+          <div class="step">
+            <span>3</span>
             <strong>Validate & Preview</strong>
             <small>Review vouchers</small>
           </div>
           <div class="step-line"></div>
           <div class="step">
-            <span>3</span>
+            <span>4</span>
             <strong>Download XML</strong>
             <small>Import in TallyPrime</small>
           </div>
@@ -137,9 +143,35 @@
               <div class="privacy-note">CSV processing runs in this browser. No file is uploaded to the hosting server.</div>
             </section>
 
-            <section class="setup-section" id="settingsPanel">
+            <section class="setup-section" id="pdfUploadCard">
               <div class="panel-title">
                 <span class="section-number">2</span>
+                <div>
+                  <h2>Upload Amazon Invoice PDFs</h2>
+                  <p>Add one or more ZIP files downloaded from Amazon Bulk Invoice.</p>
+                </div>
+              </div>
+
+              <label class="drop-zone" data-pdf-drop-zone>
+                <input id="pdfZipInput" type="file" accept=".zip,application/zip" multiple>
+                <span class="upload-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M7 4.5h7l3 3V20H7z"></path>
+                    <path d="M14 4.5v3h3"></path>
+                    <path d="M9.5 12h5"></path>
+                    <path d="M9.5 15.5h5"></path>
+                  </svg>
+                </span>
+                <strong>Drop invoice ZIP files here</strong>
+                <small>Used to enrich Bill To and Ship To addresses</small>
+                <em data-pdf-file-name>No ZIP selected</em>
+              </label>
+              <div class="privacy-note" data-pdf-summary>PDF extraction runs locally in this browser before XML generation.</div>
+            </section>
+
+            <section class="setup-section" id="settingsPanel">
+              <div class="panel-title">
+                <span class="section-number">3</span>
                 <div>
                   <h2>Tally & Ledger Settings</h2>
                   <p>Confirm the ledgers that already exist in TallyPrime.</p>
@@ -296,6 +328,10 @@
                 <strong>0</strong>
               </div>
               <div class="metric">
+                <span>PDF addresses</span>
+                <strong>0</strong>
+              </div>
+              <div class="metric">
                 <span>Issues found</span>
                 <strong>0</strong>
               </div>
@@ -325,6 +361,7 @@
                     <th>Party ledger</th>
                     <th>GSTIN</th>
                     <th>Tally item</th>
+                    <th>Address</th>
                     <th class="num">Items</th>
                     <th class="num">Taxable</th>
                     <th class="num">CGST</th>
@@ -334,7 +371,7 @@
                   </tr>
                 </thead>
                 <tbody data-preview-body>
-                  <tr><td colspan="13" class="empty">No vouchers generated yet.</td></tr>
+                  <tr><td colspan="14" class="empty">No vouchers generated yet.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -367,8 +404,11 @@
       </section>
     </main>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="converter.js"></script>
     <script src="trainer.js"></script>
+    <script src="pdf-addresses.js"></script>
     <script src="learned-mapping.js"></script>
     <script src="app.js"></script>
   </body>
