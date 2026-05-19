@@ -108,6 +108,7 @@
       }));
 
       return {
+        action: attr(voucherBlock, "ACTION"),
         voucherType: attr(voucherBlock, "VCHTYPE") || tag(voucherBlock, "VOUCHERTYPENAME"),
         voucherNumber: tag(voucherBlock, "VOUCHERNUMBER"),
         reference: tag(voucherBlock, "REFERENCE"),
@@ -133,11 +134,21 @@
     return { companyName, vouchers };
   }
 
+  function isUsableVoucher(voucher) {
+    return (
+      String(voucher.action || "").toLowerCase() !== "cancel" &&
+      (voucher.inventory.length > 0 ||
+        voucher.ledgerEntries.some((ledger) => ledger.ledgerName && ledger.amount)) &&
+      Boolean(voucher.voucherType || voucher.voucherNumber || voucher.reference || voucher.partyLedger)
+    );
+  }
+
   function indexTallyVouchers(vouchers) {
     const byInvoice = new Map();
     const byOrder = new Map();
     vouchers.forEach((voucher) => {
-      byInvoice.set(normalizeKey(voucher.voucherNumber), voucher);
+      const invoiceKey = normalizeKey(voucher.voucherNumber);
+      if (invoiceKey) byInvoice.set(invoiceKey, voucher);
       if (voucher.reference) byOrder.set(String(voucher.reference).trim(), voucher);
     });
     return { byInvoice, byOrder };
@@ -165,7 +176,8 @@
   function analyzeMappings(csvTexts, tallyXmlText) {
     const amazonRecords = parseAmazonCsvs(csvTexts);
     const tally = parseTallyVouchers(tallyXmlText);
-    const salesVouchers = tally.vouchers.filter((voucher) => /Sales\s*-\s*Amazon/i.test(voucher.voucherType));
+    const usableVouchers = tally.vouchers.filter(isUsableVoucher);
+    const salesVouchers = usableVouchers.filter((voucher) => /Sales\s*-\s*Amazon/i.test(voucher.voucherType));
     const tallyIndex = indexTallyVouchers(salesVouchers);
 
     const learned = {
@@ -196,14 +208,14 @@
     const refundRecords = amazonRecords.filter((record) => record["Transaction Type"] === "Refund");
     const refundCreditNoteNos = [...new Set(refundRecords.map((record) => record["Credit Note No"]).filter(Boolean))];
     const refundVoucherNoSet = new Set(refundCreditNoteNos);
-    const refundVouchers = tally.vouchers.filter(
+    const refundVouchers = usableVouchers.filter(
       (voucher) =>
         /Credit\s*Note/i.test(voucher.voucherType || "") ||
         refundVoucherNoSet.has(voucher.voucherNumber) ||
         refundVoucherNoSet.has(voucher.reference)
     );
     refundVouchers.forEach((voucher) => addCount(learned.refundVoucherTypeCounts, voucher.voucherType));
-    const tallyTextIndex = tally.vouchers
+    const tallyTextIndex = usableVouchers
       .map((voucher) => [voucher.voucherNumber, voucher.reference].filter(Boolean).join(" "))
       .join("\n");
     const refundCreditNotesFound = refundCreditNoteNos.filter((creditNoteNo) => tallyTextIndex.includes(creditNoteNo));
@@ -319,6 +331,8 @@
         refundCreditNotesFoundInTally: refundCreditNotesFound.length,
         tallyRefundVouchers: refundVouchers.length,
         tallySalesVouchers: salesVouchers.length,
+        tallyUsableVouchers: usableVouchers.length,
+        tallyExcludedEmptyOrCancelled: tally.vouchers.length - usableVouchers.length,
         matchedRows: matches.length,
         unmatchedAmazonRows: unmatchedAmazon.length,
         learnedItemMappings: Object.keys(config.stockMap).length,
