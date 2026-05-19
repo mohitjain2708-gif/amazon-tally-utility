@@ -148,6 +148,16 @@
     return "";
   }
 
+  function displayTallyDate(value) {
+    const raw = String(value || "");
+    if (!/^\d{8}$/.test(raw)) return "";
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const day = Number(raw.slice(6, 8));
+    const month = monthNames[Number(raw.slice(4, 6)) - 1] || raw.slice(4, 6);
+    const year = raw.slice(0, 4);
+    return `${day} ${month} ${year}`;
+  }
+
   function parseRate(value) {
     const rate = parseMoney(value);
     if (!rate) return 0;
@@ -574,6 +584,9 @@
       };
     });
 
+    const voucherDates = vouchers.map((voucher) => voucher.invoiceDate).filter(Boolean).sort();
+    const minVoucherDate = voucherDates[0] || "";
+    const maxVoucherDate = voucherDates[voucherDates.length - 1] || "";
     const signed = (voucher, value) => (voucher.isCreditNote ? -value : value);
     const summary = {
       totalRows: records.length,
@@ -592,6 +605,14 @@
       invoiceTotal: round2(vouchers.reduce((sum, voucher) => sum + signed(voucher, voucher.invoiceTotal), 0)),
       refundTotal: round2(vouchers.filter((voucher) => voucher.isCreditNote).reduce((sum, voucher) => sum + voucher.invoiceTotal, 0)),
       pdfAddressVoucherCount: vouchers.filter((voucher) => voucher.addressSource === "PDF").length,
+      minVoucherDate,
+      maxVoucherDate,
+      voucherDateRange:
+        minVoucherDate && maxVoucherDate
+          ? minVoucherDate === maxVoucherDate
+            ? displayTallyDate(minVoucherDate)
+            : `${displayTallyDate(minVoucherDate)} - ${displayTallyDate(maxVoucherDate)}`
+          : "",
     };
 
     return { config, vouchers, errors, warnings, summary };

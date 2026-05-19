@@ -35,12 +35,12 @@ function setStatus(message, tone = "neutral") {
 
 function renderEmptyState() {
   els.summary.innerHTML = `
+    <div class="metric range-metric"><span>Voucher date range</span><strong>Upload files</strong></div>
     <div class="metric"><span>Total transactions</span><strong>0</strong></div>
     <div class="metric"><span>Sales vouchers</span><strong>0</strong></div>
     <div class="metric"><span>Refund vouchers</span><strong>0</strong></div>
     <div class="metric"><span>PDF addresses</span><strong>0</strong></div>
     <div class="metric"><span>Issues found</span><strong>0</strong></div>
-    <div class="metric"><span>Net total</span><strong>0.00</strong></div>
   `;
   els.previewBody.innerHTML = '<tr><td colspan="14" class="empty">Upload a CSV and validate it to see voucher details here.</td></tr>';
   els.issuesBody.innerHTML = '<tr><td colspan="4" class="empty">Validation messages will appear here after preview.</td></tr>';
@@ -159,16 +159,16 @@ function renderLearningSummary(result) {
 
 function renderSummary(summary, errors = [], warnings = []) {
   const cards = [
+    ["Voucher date range", summary.voucherDateRange || "Not available", "range-metric"],
     ["Total transactions", summary.totalRows],
     ["Sales vouchers", summary.salesVoucherCount ?? summary.voucherCount],
     ["Refund vouchers", summary.refundVoucherCount || 0],
     ["PDF addresses", summary.pdfAddressVoucherCount || 0],
     ["Issues found", errors.length + warnings.length],
-    ["Net total", AmazonTallyConverter.formatAmount(summary.invoiceTotal)],
   ];
 
   els.summary.innerHTML = cards
-    .map(([label, value]) => `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`)
+    .map(([label, value, className]) => `<div class="metric ${className || ""}"><span>${label}</span><strong>${value}</strong></div>`)
     .join("");
 }
 
