@@ -154,7 +154,6 @@
   }
 
   async function extractFromZipFiles(files, onProgress) {
-    if (!root.JSZip) throw new Error("ZIP parser library is not loaded.");
     if (root.pdfjsLib && root.pdfjsLib.GlobalWorkerOptions) {
       root.pdfjsLib.GlobalWorkerOptions.workerSrc =
         root.pdfjsLib.GlobalWorkerOptions.workerSrc ||
@@ -164,23 +163,40 @@
     const allEntries = [];
     const records = [];
     const errors = [];
-    const zipFiles = Array.from(files || []);
+    const selectedFiles = Array.from(files || []);
+    const zipFiles = selectedFiles.filter((file) => /\.zip$/i.test(file.name));
+    const directPdfFiles = selectedFiles.filter((file) => /\.pdf$/i.test(file.name));
 
     for (const file of zipFiles) {
+      if (!root.JSZip) throw new Error("ZIP parser library is not loaded.");
       const zip = await root.JSZip.loadAsync(await file.arrayBuffer());
       Object.values(zip.files).forEach((entry) => {
-        if (!entry.dir && /\.pdf$/i.test(entry.name)) allEntries.push({ file, entry });
+        if (!entry.dir && /\.pdf$/i.test(entry.name)) {
+          allEntries.push({
+            sourceFile: file.name,
+            fileName: entry.name,
+            readArrayBuffer: () => entry.async("arraybuffer"),
+          });
+        }
       });
     }
 
+    directPdfFiles.forEach((file) => {
+      allEntries.push({
+        sourceFile: file.name,
+        fileName: file.name,
+        readArrayBuffer: () => file.arrayBuffer(),
+      });
+    });
+
     let processed = 0;
-    for (const { entry } of allEntries) {
+    for (const entry of allEntries) {
       try {
-        const data = await entry.async("arraybuffer");
+        const data = await entry.readArrayBuffer();
         const text = await extractPdfText(data);
-        records.push(parseInvoiceText(text, entry.name.split(/[\\/]/).pop()));
+        records.push(parseInvoiceText(text, entry.fileName.split(/[\\/]/).pop()));
       } catch (error) {
-        errors.push({ fileName: entry.name, message: error.message });
+        errors.push({ fileName: entry.fileName, message: error.message });
       }
       processed += 1;
       if (onProgress) onProgress({ processed, total: allEntries.length });
@@ -191,6 +207,7 @@
       ...buildIndex(records),
       summary: {
         zipCount: zipFiles.length,
+        directPdfCount: directPdfFiles.length,
         pdfCount: allEntries.length,
         parsedPdfCount: records.length,
         errorCount: errors.length,

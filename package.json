@@ -5,6 +5,6 @@
   "scripts": {
     "dev": "node static-server.js 59231",
     "start": "node static-server.js 59231",
-    "build": "rm -rf dist && mkdir -p dist && cp -R index.html *.css *.js dist/"
+    "build": "node -e \"const fs=require('fs'); fs.rmSync('dist',{recursive:true,force:true}); fs.mkdirSync('dist',{recursive:true}); for (const f of fs.readdirSync('.')) if (/^(index\\.html|.*\\.css|.*\\.js)$/.test(f)) fs.copyFileSync(f,'dist/'+f);\""
   }
 }

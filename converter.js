@@ -906,6 +906,7 @@
       invoiceNo: voucher.isCreditNote ? voucher.sourceInvoiceNo : voucher.invoiceNo,
       type: voucher.voucherKind,
       voucherNo: voucher.voucherNo,
+      orderId: voucher.orderId || "",
       date: voucher.invoiceDate,
       partyLedger: voucher.partyLedger,
       gstin: voucher.billToGstin || voucher.shipToGstin || "",

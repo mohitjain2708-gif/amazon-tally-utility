@@ -3,6 +3,7 @@ output-b2b/
 output-b2c-retest/
 tally-test-output/
 learned-output/
+dist/
 
 *.csv
 *.xlsx
