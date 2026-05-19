@@ -27,7 +27,7 @@
 
   const DEFAULT_CONFIG = {
     voucherType: "Sales - Amazon",
-    refundVoucherType: "Credit Note",
+    refundVoucherType: "Amazon Cr. Note",
     companyName: "",
     gstRegistrationName: "Delhi Registration",
     companyGstState: "Delhi",
@@ -313,9 +313,10 @@
         return;
       }
 
+      const originalInvoiceDate = parseAmazonDate(record["Invoice Date"]);
       const invoiceDate = refund
-        ? parseAmazonDate(record["Credit Note Date"]) || parseAmazonDate(record["Invoice Date"])
-        : parseAmazonDate(record["Invoice Date"]);
+        ? parseAmazonDate(record["Credit Note Date"]) || originalInvoiceDate
+        : originalInvoiceDate;
       const orderDate = parseAmazonDate(record["Order Date"]);
       const shipmentDate = parseAmazonDate(record["Shipment Date"]);
       const quantity = absMoney(record.Quantity);
@@ -387,7 +388,9 @@
         voucherType: refund ? config.refundVoucherType : config.voucherType,
         voucherKind: refund ? "Refund" : "Sale",
         isCreditNote: refund,
-        referenceNo: refund ? creditNoteNo : String(record["Order Id"] || "").trim(),
+        referenceNo: refund ? sourceInvoiceNo : String(record["Order Id"] || "").trim(),
+        billReferenceNo: String(record["Order Id"] || "").trim() || (refund ? sourceInvoiceNo : invoiceNo),
+        referenceDate: refund ? originalInvoiceDate || invoiceDate : invoiceDate,
         invoiceDate,
         orderDate,
         shipmentDate,
@@ -470,6 +473,8 @@
         voucherKind: first.voucherKind,
         isCreditNote: first.isCreditNote,
         referenceNo: first.referenceNo,
+        billReferenceNo: first.billReferenceNo,
+        referenceDate: first.referenceDate,
         invoiceDate: first.invoiceDate,
         orderDate: first.orderDate,
         shipmentDate: first.shipmentDate,
@@ -592,6 +597,7 @@
         ? [
             `${" ".repeat(indent + 2)}<BATCHALLOCATIONS.LIST>`,
             godown ? xmlTag("GODOWNNAME", godown, indent + 4) : "",
+            godown ? xmlTag("DESTINATIONGODOWNNAME", godown, indent + 4) : "",
             batch ? xmlTag("BATCHNAME", batch, indent + 4) : "",
             xmlTag("AMOUNT", formatAmount(amount), indent + 4),
             xmlTag("ACTUALQTY", ` ${item.quantity} ${item.unitName}`, indent + 4),
@@ -642,9 +648,11 @@
     const partyAmount = voucher.isCreditNote ? voucher.invoiceTotal : -voucher.invoiceTotal;
     const partyIsDeemedPositive = !voucher.isCreditNote;
     const referenceNo = voucher.referenceNo || voucher.orderId;
+    const billReferenceNo = voucher.billReferenceNo || voucher.orderId || referenceNo || voucher.voucherNo;
+    const referenceDate = voucher.referenceDate || voucher.invoiceDate;
     const lines = [
       '      <TALLYMESSAGE xmlns:UDF="TallyUDF">',
-      `        <VOUCHER VCHTYPE="${xmlEscape(voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">`,
+      `        <VOUCHER VCHTYPE="${xmlEscape(voucherType)}" ACTION="Create" OBJVIEW="Invoice Voucher View">`,
       ...xmlList(
         "ADDRESS.LIST",
         "ADDRESS",
@@ -663,7 +671,7 @@
       xmlTag("OLDAUDITENTRYIDS", "-1", 12),
       "          </OLDAUDITENTRYIDS.LIST>",
       xmlTag("DATE", voucher.invoiceDate, 10),
-      xmlTag("REFERENCEDATE", voucher.invoiceDate, 10),
+      xmlTag("REFERENCEDATE", referenceDate, 10),
       xmlTag("VCHSTATUSDATE", voucher.invoiceDate, 10),
       xmlTag("GSTREGISTRATIONTYPE", voucher.gstRegistrationType, 10),
       xmlTag("VOUCHERTYPENAME", voucherType, 10),
@@ -687,7 +695,7 @@
       xmlTag("COUNTRYOFRESIDENCE", voucher.shipToCountry || "India", 10),
       xmlTag("PLACEOFSUPPLY", voucher.placeOfSupply, 10),
       xmlTag("NUMBERINGSTYLE", "Manual", 10),
-      xmlTag("PERSISTEDVIEW", "Accounting Voucher View", 10),
+      xmlTag("PERSISTEDVIEW", "Invoice Voucher View", 10),
       xmlTag("VCHSTATUSVOUCHERTYPE", voucherType, 10),
       config.gstRegistrationName ? xmlTag("VCHSTATUSTAXUNIT", config.gstRegistrationName, 10) : "",
       xmlTag("VCHENTRYMODE", "Item Invoice", 10),
@@ -708,7 +716,7 @@
     const billAllocations = config.includeBillAllocations
       ? [
           "          <BILLALLOCATIONS.LIST>",
-          xmlTag("NAME", referenceNo || voucher.voucherNo, 12),
+          xmlTag("NAME", billReferenceNo, 12),
           xmlTag("BILLTYPE", "New Ref", 12),
           xmlTag("TDSDEDUCTEEISSPECIALRATE", "No", 12),
           xmlTag("AMOUNT", formatAmount(partyAmount), 12),
