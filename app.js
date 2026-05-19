@@ -11,6 +11,11 @@ const els = {
   processButton: document.querySelector("#processButton"),
   status: document.querySelector("[data-status]"),
   summary: document.querySelector("[data-summary]"),
+  dateFilter: document.querySelector("[data-date-filter]"),
+  dateFrom: document.querySelector("[data-date-from]"),
+  dateTo: document.querySelector("[data-date-to]"),
+  dateReset: document.querySelector("[data-date-reset]"),
+  dateFilterHelp: document.querySelector("[data-date-filter-help]"),
   readyLabel: document.querySelector("[data-ready-label]"),
   readiness: document.querySelector("[data-readiness]"),
   validationSummary: document.querySelector("[data-validation-summary]"),
@@ -32,6 +37,10 @@ let currentSalesFiles = [];
 let currentPdfFiles = [];
 let currentAddressIndex = null;
 let currentResult = null;
+let currentCsvText = "";
+let currentBaseConfig = null;
+let fullDateRange = { from: "", to: "" };
+let syncingDateInputs = false;
 let currentLearnedMapping = null;
 
 function setStatus(message, tone = "neutral") {
@@ -51,6 +60,8 @@ function renderEmptyState() {
   els.issuesBody.innerHTML = '<tr><td colspan="4" class="empty">Validation messages will appear here after preview.</td></tr>';
   if (els.readyLabel) els.readyLabel.textContent = "(Waiting for upload)";
   if (els.readiness) els.readiness.innerHTML = `${statusIcon()} Upload Amazon Excel/CSV files, add invoice ZIP/PDF files if available, then validate to generate XML.`;
+  if (els.dateFilter) els.dateFilter.hidden = true;
+  fullDateRange = { from: "", to: "" };
   renderValidationSummary(0, 0, 0);
 }
 
@@ -98,6 +109,8 @@ function selectedFilesLabel(files, emptyLabel) {
 function selectSalesFiles(files) {
   currentSalesFiles = Array.from(files || []).filter((file) => /\.(csv|xlsx|xls)$/i.test(file.name));
   currentResult = null;
+  currentCsvText = "";
+  currentBaseConfig = null;
   els.fileName.textContent = selectedFilesLabel(currentSalesFiles, "Choose Excel / CSV files");
   els.dropZone.classList.toggle("has-file", currentSalesFiles.length > 0);
   els.processButton.disabled = !currentSalesFiles.length;
@@ -115,6 +128,7 @@ function selectSalesFiles(files) {
 function selectPdfFiles(files) {
   currentPdfFiles = Array.from(files || []).filter((file) => /\.(zip|pdf)$/i.test(file.name));
   currentAddressIndex = null;
+  currentBaseConfig = null;
   els.pdfFileName.textContent = selectedFilesLabel(currentPdfFiles, "Choose ZIP / PDF files");
   els.pdfDropZone.classList.toggle("has-file", currentPdfFiles.length > 0);
   els.pdfSummary.textContent = currentPdfFiles.length
@@ -212,6 +226,18 @@ function csvEscape(value) {
 
 function rowsToCsv(rows) {
   return rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+}
+
+function tallyDateToInputDate(value) {
+  const raw = String(value || "");
+  if (!/^\d{8}$/.test(raw)) return "";
+  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+}
+
+function inputDateToTallyDate(value) {
+  const raw = String(value || "");
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[1]}${match[2]}${match[3]}` : "";
 }
 
 async function readSalesFileAsCsv(file) {
@@ -385,6 +411,73 @@ function renderIssues(errors, warnings) {
     : '<tr><td colspan="4" class="empty">No validation issues found.</td></tr>';
 }
 
+function setupDateFilter(summary) {
+  const minDate = tallyDateToInputDate(summary.minVoucherDate);
+  const maxDate = tallyDateToInputDate(summary.maxVoucherDate);
+  if (!els.dateFilter || !minDate || !maxDate) {
+    if (els.dateFilter) els.dateFilter.hidden = true;
+    return;
+  }
+
+  fullDateRange = { from: minDate, to: maxDate };
+  syncingDateInputs = true;
+  els.dateFilter.hidden = false;
+  [els.dateFrom, els.dateTo].forEach((input) => {
+    input.min = minDate;
+    input.max = maxDate;
+  });
+  els.dateFrom.value = minDate;
+  els.dateTo.value = maxDate;
+  if (els.dateFilterHelp) {
+    els.dateFilterHelp.textContent = `Full uploaded period: ${summary.voucherDateRange}. Choose a smaller range if needed.`;
+  }
+  syncingDateInputs = false;
+}
+
+function renderResult(result) {
+  currentResult = result;
+  renderSummary(result.summary, result.errors, result.warnings);
+  renderPreview(result.preview);
+  renderIssues(result.errors, result.warnings);
+
+  const hasErrors = result.errors.length > 0;
+  els.xmlButton.disabled = hasErrors || !result.xml;
+  els.reportButton.disabled = !result.reportCsv;
+  setStatus(
+    hasErrors
+      ? `Found ${result.errors.length} error(s). Fix them before importing into Tally.`
+      : `Generated ${result.summary.voucherCount} voucher(s), including ${result.summary.refundVoucherCount || 0} refund voucher(s), with ${result.summary.pdfAddressVoucherCount || 0} PDF address match(es).`,
+    hasErrors ? "bad" : "good"
+  );
+}
+
+function applyDateFilter() {
+  if (syncingDateInputs || !currentCsvText || !currentBaseConfig) return;
+  const from = els.dateFrom?.value || "";
+  const to = els.dateTo?.value || "";
+
+  if (from && to && from > to) {
+    setStatus("Selected From date cannot be after To date.", "bad");
+    els.xmlButton.disabled = true;
+    els.reportButton.disabled = true;
+    return;
+  }
+
+  const config = {
+    ...currentBaseConfig,
+    dateFrom: inputDateToTallyDate(from),
+    dateTo: inputDateToTallyDate(to),
+  };
+  const filteredResult = AmazonTallyConverter.convertCsvText(currentCsvText, config);
+  renderResult(filteredResult);
+  if (els.dateFilterHelp) {
+    const usingFullRange = from === fullDateRange.from && to === fullDateRange.to;
+    els.dateFilterHelp.textContent = usingFullRange
+      ? `Full uploaded period selected: ${filteredResult.summary.voucherDateRange || "not available"}.`
+      : `XML will include only vouchers dated ${filteredResult.summary.voucherDateRange || "within the selected dates"}.`;
+  }
+}
+
 function escapeHtml(value) {
   return String(value == null ? "" : value)
     .replace(/&/g, "&amp;")
@@ -423,20 +516,11 @@ async function processFile() {
     const [csvText, addressIndex] = await Promise.all([readSalesFilesAsCsvText(currentSalesFiles), ensureAddressIndex()]);
     const config = readConfig();
     if (addressIndex) config.addressIndex = addressIndex;
-    currentResult = AmazonTallyConverter.convertCsvText(csvText, config);
-    renderSummary(currentResult.summary, currentResult.errors, currentResult.warnings);
-    renderPreview(currentResult.preview);
-    renderIssues(currentResult.errors, currentResult.warnings);
-
-    const hasErrors = currentResult.errors.length > 0;
-    els.xmlButton.disabled = hasErrors || !currentResult.xml;
-    els.reportButton.disabled = !currentResult.reportCsv;
-    setStatus(
-      hasErrors
-        ? `Found ${currentResult.errors.length} error(s). Fix them before importing into Tally.`
-        : `Generated ${currentResult.summary.voucherCount} voucher(s), including ${currentResult.summary.refundVoucherCount || 0} refund voucher(s), with ${currentResult.summary.pdfAddressVoucherCount || 0} PDF address match(es).`,
-      hasErrors ? "bad" : "good"
-    );
+    currentCsvText = csvText;
+    currentBaseConfig = config;
+    const result = AmazonTallyConverter.convertCsvText(csvText, config);
+    setupDateFilter(result.summary);
+    renderResult(result);
   } catch (error) {
     setStatus(`Could not process file: ${error.message}`, "bad");
     els.xmlButton.disabled = true;
@@ -449,6 +533,18 @@ async function processFile() {
 els.fileInput.addEventListener("change", (event) => selectSalesFiles(event.target.files));
 els.pdfZipInput.addEventListener("change", (event) => selectPdfFiles(event.target.files));
 els.processButton.addEventListener("click", processFile);
+if (els.dateFrom) els.dateFrom.addEventListener("change", applyDateFilter);
+if (els.dateTo) els.dateTo.addEventListener("change", applyDateFilter);
+if (els.dateReset) {
+  els.dateReset.addEventListener("click", () => {
+    if (!fullDateRange.from || !fullDateRange.to) return;
+    syncingDateInputs = true;
+    els.dateFrom.value = fullDateRange.from;
+    els.dateTo.value = fullDateRange.to;
+    syncingDateInputs = false;
+    applyDateFilter();
+  });
+}
 
 els.dropZone.addEventListener("dragover", (event) => {
   event.preventDefault();

@@ -158,6 +158,24 @@
     return `${day} ${month} ${year}`;
   }
 
+  function normalizeFilterDate(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (/^\d{8}$/.test(raw)) return raw;
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return `${iso[1]}${iso[2]}${iso[3]}`;
+    return parseAmazonDate(raw);
+  }
+
+  function isDateWithinFilter(tallyDate, config) {
+    if (!tallyDate) return true;
+    const from = normalizeFilterDate(config.dateFrom);
+    const to = normalizeFilterDate(config.dateTo);
+    if (from && tallyDate < from) return false;
+    if (to && tallyDate > to) return false;
+    return true;
+  }
+
   function parseRate(value) {
     const rate = parseMoney(value);
     if (!rate) return 0;
@@ -327,6 +345,10 @@
       const invoiceNo = isRefund(record)
         ? String(record["Credit Note No"] || "").trim()
         : String(record["Invoice Number"] || "").trim();
+      const recordInvoiceDate = isRefund(record)
+        ? parseAmazonDate(record["Credit Note Date"]) || parseAmazonDate(record["Invoice Date"])
+        : parseAmazonDate(record["Invoice Date"]);
+      if (!isDateWithinFilter(recordInvoiceDate, config)) return;
       if (invoiceNo) invoiceCounts.set(invoiceNo, (invoiceCounts.get(invoiceNo) || 0) + 1);
       const lineKey = [
         invoiceNo,
@@ -365,6 +387,7 @@
       const invoiceDate = refund
         ? parseAmazonDate(record["Credit Note Date"]) || originalInvoiceDate
         : originalInvoiceDate;
+      if (isDateWithinFilter(invoiceDate, config) === false) return;
       const orderDate = parseAmazonDate(record["Order Date"]);
       const shipmentDate = parseAmazonDate(record["Shipment Date"]);
       const quantity = absMoney(record.Quantity);

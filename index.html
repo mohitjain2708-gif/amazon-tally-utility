@@ -350,6 +350,22 @@
             </div>
           </div>
 
+          <section class="date-filter" data-date-filter hidden>
+            <div>
+              <strong>Generate XML for selected dates</strong>
+              <span data-date-filter-help>Choose any date range within the uploaded voucher period.</span>
+            </div>
+            <label>
+              <span>From</span>
+              <input type="date" data-date-from>
+            </label>
+            <label>
+              <span>To</span>
+              <input type="date" data-date-to>
+            </label>
+            <button type="button" data-date-reset>Use full range</button>
+          </section>
+
           <div class="readiness-banner" data-readiness>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.8 12.5 2.1 2.1 4.4-4.6"></path><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"></path></svg>
             Upload the Amazon CSV, add invoice PDFs if available, then validate to generate XML.
