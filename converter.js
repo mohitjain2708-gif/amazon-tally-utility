@@ -528,9 +528,11 @@
     return { config, vouchers, errors, warnings, summary };
   }
 
-  function ledgerEntryXml(name, isDeemedPositive, amount, indent, extraLines) {
+  function ledgerEntryXml(name, isDeemedPositive, amount, indent, extraLines, options = {}) {
+    const tagName = options.tagName || "LEDGERENTRIES.LIST";
+    const isPartyLedger = options.isPartyLedger ? "Yes" : "No";
     const lines = [
-      `${" ".repeat(indent)}<ALLLEDGERENTRIES.LIST>`,
+      `${" ".repeat(indent)}<${tagName}>`,
       `${" ".repeat(indent + 2)}<OLDAUDITENTRYIDS.LIST TYPE="Number">`,
       xmlTag("OLDAUDITENTRYIDS", "-1", indent + 4),
       `${" ".repeat(indent + 2)}</OLDAUDITENTRYIDS.LIST>`,
@@ -538,12 +540,14 @@
       xmlTag("GSTCLASS", "Not Applicable", indent + 2),
       xmlTag("GSTOVRDNTYPEOFSUPPLY", "Services", indent + 2),
       xmlTag("ISDEEMEDPOSITIVE", isDeemedPositive ? "Yes" : "No", indent + 2),
-      xmlTag("ISPARTYLEDGER", isDeemedPositive ? "Yes" : "No", indent + 2),
+      xmlTag("LEDGERFROMITEM", "No", indent + 2),
+      xmlTag("ISPARTYLEDGER", isPartyLedger, indent + 2),
       xmlTag("ISLASTDEEMEDPOSITIVE", isDeemedPositive ? "Yes" : "No", indent + 2),
       xmlTag("AMOUNT", formatAmount(amount), indent + 2),
     ];
     if (extraLines) lines.push(...extraLines);
-    lines.push(`${" ".repeat(indent)}</ALLLEDGERENTRIES.LIST>`);
+    if (options.vatExpAmount) lines.push(xmlTag("VATEXPAMOUNT", formatAmount(amount), indent + 2));
+    lines.push(`${" ".repeat(indent)}</${tagName}>`);
     return lines;
   }
 
@@ -566,17 +570,44 @@
     return pattern.replace("{warehouse}", item.warehouseId || "").trim();
   }
 
-  function batchNameFor(config) {
-    return String(config.batchName || "").trim();
+  function batchNameFor(item, config) {
+    return String(config.batchName || "").trim() || item.invoiceDate || "";
   }
 
-  function inventoryAllocationXml(item, config, indent, isCreditNote) {
+  function accountingAllocationXml(item, config, indent, isCreditNote) {
+    const amount = isCreditNote ? -item.taxable : item.taxable;
+    const deemedPositive = isCreditNote ? "Yes" : "No";
+    return [
+      `${" ".repeat(indent)}<ACCOUNTINGALLOCATIONS.LIST>`,
+      `${" ".repeat(indent + 2)}<OLDAUDITENTRYIDS.LIST TYPE="Number">`,
+      xmlTag("OLDAUDITENTRYIDS", "-1", indent + 4),
+      `${" ".repeat(indent + 2)}</OLDAUDITENTRYIDS.LIST>`,
+      xmlTag("LEDGERNAME", config.salesLedgerName, indent + 2),
+      xmlTag("GSTCLASS", "Not Applicable", indent + 2),
+      xmlTag("GSTOVRDNTYPEOFSUPPLY", "Goods", indent + 2),
+      xmlTag("GSTRATEINFERAPPLICABILITY", "As per Masters/Company", indent + 2),
+      xmlTag("GSTHSNINFERAPPLICABILITY", "As per Masters/Company", indent + 2),
+      xmlTag("ISDEEMEDPOSITIVE", deemedPositive, indent + 2),
+      xmlTag("LEDGERFROMITEM", "No", indent + 2),
+      xmlTag("ISPARTYLEDGER", "No", indent + 2),
+      xmlTag("ISLASTDEEMEDPOSITIVE", deemedPositive, indent + 2),
+      xmlTag("AMOUNT", formatAmount(amount), indent + 2),
+      ...rateDetailsXml("CGST", 0, indent + 2),
+      ...rateDetailsXml("SGST/UTGST", 0, indent + 2),
+      ...rateDetailsXml("IGST", 0, indent + 2),
+      ...rateDetailsXml("Cess", 0, indent + 2),
+      ...rateDetailsXml("State Cess", 0, indent + 2),
+      `${" ".repeat(indent)}</ACCOUNTINGALLOCATIONS.LIST>`,
+    ];
+  }
+
+  function inventoryEntryXml(item, config, indent, isCreditNote) {
     const godown = godownNameFor(item, config);
-    const batch = batchNameFor(config);
+    const batch = batchNameFor(item, config);
     const amount = isCreditNote ? -item.taxable : item.taxable;
     const deemedPositive = isCreditNote ? "Yes" : "No";
     const lines = [
-      `${" ".repeat(indent)}<INVENTORYALLOCATIONS.LIST>`,
+      `${" ".repeat(indent)}<ALLINVENTORYENTRIES.LIST>`,
       xmlTag("STOCKITEMNAME", item.stockName, indent + 2),
       xmlTag("GSTOVRDNTAXABILITY", "Taxable", indent + 2),
       xmlTag("GSTSOURCETYPE", "Stock Item", indent + 2),
@@ -597,8 +628,8 @@
         ? [
             `${" ".repeat(indent + 2)}<BATCHALLOCATIONS.LIST>`,
             godown ? xmlTag("GODOWNNAME", godown, indent + 4) : "",
-            godown ? xmlTag("DESTINATIONGODOWNNAME", godown, indent + 4) : "",
             batch ? xmlTag("BATCHNAME", batch, indent + 4) : "",
+            godown ? xmlTag("DESTINATIONGODOWNNAME", godown, indent + 4) : "",
             xmlTag("AMOUNT", formatAmount(amount), indent + 4),
             xmlTag("ACTUALQTY", ` ${item.quantity} ${item.unitName}`, indent + 4),
             xmlTag("BILLEDQTY", ` ${item.quantity} ${item.unitName}`, indent + 4),
@@ -607,40 +638,15 @@
             .filter(Boolean)
             .join("\n")
         : "",
+      ...accountingAllocationXml(item, config, indent + 2, isCreditNote),
       ...rateDetailsXml("CGST", item.cgstRate, indent + 2),
       ...rateDetailsXml("SGST/UTGST", item.sgstRate, indent + 2),
       ...rateDetailsXml("IGST", item.igstRate, indent + 2),
       ...rateDetailsXml("Cess", 0, indent + 2),
       ...rateDetailsXml("State Cess", 0, indent + 2),
-      `${" ".repeat(indent)}</INVENTORYALLOCATIONS.LIST>`,
+      `${" ".repeat(indent)}</ALLINVENTORYENTRIES.LIST>`,
     ];
     return lines.filter(Boolean);
-  }
-
-  function salesLedgerEntryXml(voucher, config, indent) {
-    const amount = voucher.isCreditNote ? -voucher.taxableTotal : voucher.taxableTotal;
-    const deemedPositive = voucher.isCreditNote ? "Yes" : "No";
-    return [
-      `${" ".repeat(indent)}<ALLLEDGERENTRIES.LIST>`,
-      `${" ".repeat(indent + 2)}<OLDAUDITENTRYIDS.LIST TYPE="Number">`,
-      xmlTag("OLDAUDITENTRYIDS", "-1", indent + 4),
-      `${" ".repeat(indent + 2)}</OLDAUDITENTRYIDS.LIST>`,
-      xmlTag("LEDGERNAME", config.salesLedgerName, indent + 2),
-      xmlTag("GSTCLASS", "Not Applicable", indent + 2),
-      xmlTag("GSTOVRDNTYPEOFSUPPLY", "Goods", indent + 2),
-      xmlTag("ISDEEMEDPOSITIVE", deemedPositive, indent + 2),
-      xmlTag("LEDGERFROMITEM", "No", indent + 2),
-      xmlTag("ISPARTYLEDGER", "No", indent + 2),
-      xmlTag("ISLASTDEEMEDPOSITIVE", deemedPositive, indent + 2),
-      xmlTag("AMOUNT", formatAmount(amount), indent + 2),
-      ...voucher.lines.flatMap((item) => inventoryAllocationXml(item, config, indent + 2, voucher.isCreditNote)),
-      ...rateDetailsXml("CGST", 0, indent + 2),
-      ...rateDetailsXml("SGST/UTGST", 0, indent + 2),
-      ...rateDetailsXml("IGST", 0, indent + 2),
-      ...rateDetailsXml("Cess", 0, indent + 2),
-      ...rateDetailsXml("State Cess", 0, indent + 2),
-      `${" ".repeat(indent)}</ALLLEDGERENTRIES.LIST>`,
-    ];
   }
 
   function buildVoucherXml(voucher, config) {
@@ -725,18 +731,21 @@
       : [];
 
     const ledgerLines = [
-      ...ledgerEntryXml(voucher.partyLedger, partyIsDeemedPositive, partyAmount, 10, billAllocations),
-      ...salesLedgerEntryXml(voucher, config, 10),
+      ...ledgerEntryXml(voucher.partyLedger, partyIsDeemedPositive, partyAmount, 10, billAllocations, {
+        isPartyLedger: true,
+      }),
     ];
 
     const taxSign = voucher.isCreditNote ? -1 : 1;
-    if (voucher.cgstTotal) ledgerLines.push(...ledgerEntryXml(config.cgstLedgerName, voucher.isCreditNote, taxSign * voucher.cgstTotal, 10));
-    if (voucher.sgstTotal) ledgerLines.push(...ledgerEntryXml(config.sgstLedgerName, voucher.isCreditNote, taxSign * voucher.sgstTotal, 10));
-    if (voucher.igstTotal) ledgerLines.push(...ledgerEntryXml(config.igstLedgerName, voucher.isCreditNote, taxSign * voucher.igstTotal, 10));
+    if (voucher.cgstTotal) ledgerLines.push(...ledgerEntryXml(config.cgstLedgerName, voucher.isCreditNote, taxSign * voucher.cgstTotal, 10, null, { vatExpAmount: true }));
+    if (voucher.sgstTotal) ledgerLines.push(...ledgerEntryXml(config.sgstLedgerName, voucher.isCreditNote, taxSign * voucher.sgstTotal, 10, null, { vatExpAmount: true }));
+    if (voucher.igstTotal) ledgerLines.push(...ledgerEntryXml(config.igstLedgerName, voucher.isCreditNote, taxSign * voucher.igstTotal, 10, null, { vatExpAmount: true }));
     if (voucher.roundOff) {
       const roundOffAmount = voucher.isCreditNote ? -voucher.roundOff : voucher.roundOff;
       ledgerLines.push(...ledgerEntryXml(config.roundOffLedgerName, roundOffAmount < 0, roundOffAmount, 10));
     }
+
+    lines.push(...voucher.lines.flatMap((item) => inventoryEntryXml(item, config, 10, voucher.isCreditNote)));
 
     if (voucher.orderId) {
       lines.push(
