@@ -171,6 +171,7 @@
     const learned = {
       companyName: tally.companyName,
       voucherTypeCounts: {},
+      refundVoucherTypeCounts: {},
       persistedViewCounts: {},
       invoiceSuffixCounts: {},
       b2bPartyLedgerCounts: {},
@@ -194,7 +195,15 @@
     const shipmentRecords = amazonRecords.filter((record) => record["Transaction Type"] === "Shipment" && record["Invoice Number"]);
     const refundRecords = amazonRecords.filter((record) => record["Transaction Type"] === "Refund");
     const refundCreditNoteNos = [...new Set(refundRecords.map((record) => record["Credit Note No"]).filter(Boolean))];
-    const tallyTextIndex = salesVouchers
+    const refundVoucherNoSet = new Set(refundCreditNoteNos);
+    const refundVouchers = tally.vouchers.filter(
+      (voucher) =>
+        /Credit\s*Note/i.test(voucher.voucherType || "") ||
+        refundVoucherNoSet.has(voucher.voucherNumber) ||
+        refundVoucherNoSet.has(voucher.reference)
+    );
+    refundVouchers.forEach((voucher) => addCount(learned.refundVoucherTypeCounts, voucher.voucherType));
+    const tallyTextIndex = tally.vouchers
       .map((voucher) => [voucher.voucherNumber, voucher.reference].filter(Boolean).join(" "))
       .join("\n");
     const refundCreditNotesFound = refundCreditNoteNos.filter((creditNoteNo) => tallyTextIndex.includes(creditNoteNo));
@@ -277,6 +286,7 @@
     const config = {
       companyName: tally.companyName || converter.DEFAULT_CONFIG.companyName,
       voucherType: mostCommon(learned.voucherTypeCounts, converter.DEFAULT_CONFIG.voucherType),
+      refundVoucherType: mostCommon(learned.refundVoucherTypeCounts, converter.DEFAULT_CONFIG.refundVoucherType),
       invoiceNumberRule: mostCommon(learned.invoiceNumberRuleCounts, "voucher_number = amazon_invoice_number"),
       referenceRule: mostCommon(learned.referenceRuleCounts, "reference = amazon_order_id"),
       invoiceSuffix:
@@ -307,6 +317,7 @@
         amazonRefundRows: refundRecords.length,
         refundCreditNotesInAmazon: refundCreditNoteNos.length,
         refundCreditNotesFoundInTally: refundCreditNotesFound.length,
+        tallyRefundVouchers: refundVouchers.length,
         tallySalesVouchers: salesVouchers.length,
         matchedRows: matches.length,
         unmatchedAmazonRows: unmatchedAmazon.length,

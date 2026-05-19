@@ -27,6 +27,7 @@
 
   const DEFAULT_CONFIG = {
     voucherType: "Sales - Amazon",
+    refundVoucherType: "Credit Note",
     companyName: "",
     gstRegistrationName: "Delhi Registration",
     companyGstState: "Delhi",
@@ -47,7 +48,7 @@
     godownPattern: "Amazon - MCIE ({warehouse})",
     batchName: "",
     includeBillAllocations: true,
-    skipNonShipmentRows: true,
+    includeRefundRows: true,
   };
 
   function parseCSV(text) {
@@ -254,6 +255,18 @@
     return REQUIRED_COLUMNS.filter((column) => !headers.includes(column));
   }
 
+  function isShipment(record) {
+    return String(record["Transaction Type"] || "").trim() === "Shipment";
+  }
+
+  function isRefund(record) {
+    return String(record["Transaction Type"] || "").trim() === "Refund";
+  }
+
+  function absMoney(value) {
+    return Math.abs(parseMoney(value));
+  }
+
   function analyzeRecords(records, configInput) {
     const config = { ...DEFAULT_CONFIG, ...configInput };
     const errors = [];
@@ -262,8 +275,10 @@
     const lineCounts = new Map();
 
     records.forEach((record) => {
-      if (String(record["Transaction Type"] || "").trim() !== "Shipment") return;
-      const invoiceNo = String(record["Invoice Number"] || "").trim();
+      if (!isShipment(record) && !isRefund(record)) return;
+      const invoiceNo = isRefund(record)
+        ? String(record["Credit Note No"] || "").trim()
+        : String(record["Invoice Number"] || "").trim();
       if (invoiceNo) invoiceCounts.set(invoiceNo, (invoiceCounts.get(invoiceNo) || 0) + 1);
       const lineKey = [
         invoiceNo,
@@ -282,28 +297,34 @@
     records.forEach((record) => {
       const row = record.__rowNumber;
       const transactionType = String(record["Transaction Type"] || "").trim();
-      const invoiceNo = String(record["Invoice Number"] || "").trim();
+      const refund = transactionType === "Refund";
+      const shipment = transactionType === "Shipment";
+      const sourceInvoiceNo = String(record["Invoice Number"] || "").trim();
+      const creditNoteNo = String(record["Credit Note No"] || "").trim();
+      const invoiceNo = refund ? creditNoteNo : sourceInvoiceNo;
 
-      if (transactionType !== "Shipment") {
+      if (!shipment && !refund) {
         warnings.push({
           row,
-          invoiceNo,
+          invoiceNo: sourceInvoiceNo,
           severity: "Warning",
-          message: `${transactionType || "Unknown"} row skipped. Sales XML currently includes Shipment rows only.`,
+          message: `${transactionType || "Unknown"} row skipped. Only Shipment and Refund rows are converted.`,
         });
         return;
       }
 
-      const invoiceDate = parseAmazonDate(record["Invoice Date"]);
+      const invoiceDate = refund
+        ? parseAmazonDate(record["Credit Note Date"]) || parseAmazonDate(record["Invoice Date"])
+        : parseAmazonDate(record["Invoice Date"]);
       const orderDate = parseAmazonDate(record["Order Date"]);
       const shipmentDate = parseAmazonDate(record["Shipment Date"]);
-      const quantity = parseMoney(record.Quantity);
-      const taxable = parseMoney(record["Tax Exclusive Gross"]);
-      const invoiceAmount = parseMoney(record["Invoice Amount"]);
-      const tax = parseMoney(record["Total Tax Amount"]);
-      const cgst = parseMoney(record["Cgst Tax"]);
-      const sgst = parseMoney(record["Sgst Tax"]);
-      const igst = parseMoney(record["Igst Tax"]);
+      const quantity = absMoney(record.Quantity);
+      const taxable = refund ? absMoney(record["Tax Exclusive Gross"]) : parseMoney(record["Tax Exclusive Gross"]);
+      const invoiceAmount = refund ? absMoney(record["Invoice Amount"]) : parseMoney(record["Invoice Amount"]);
+      const tax = refund ? absMoney(record["Total Tax Amount"]) : parseMoney(record["Total Tax Amount"]);
+      const cgst = refund ? absMoney(record["Cgst Tax"]) : parseMoney(record["Cgst Tax"]);
+      const sgst = refund ? absMoney(record["Sgst Tax"]) : parseMoney(record["Sgst Tax"]);
+      const igst = refund ? absMoney(record["Igst Tax"]) : parseMoney(record["Igst Tax"]);
       const cgstRate = parseRate(record["Cgst Rate"]);
       const sgstRate = parseRate(record["Sgst Rate"] || record["Utgst Rate"]);
       const igstRate = parseRate(record["Igst Rate"]);
@@ -327,11 +348,12 @@
       const billToPostalCode = String(record["Bill To Postalcode"] || "").trim();
       const isB2b = Boolean(buyerName || billToGstin || shipToGstin);
 
-      if (!invoiceNo) errors.push({ row, invoiceNo, severity: "Error", message: "Missing invoice number." });
-      if (!invoiceDate) errors.push({ row, invoiceNo, severity: "Error", message: "Invalid or missing invoice date." });
+      if (!invoiceNo) errors.push({ row, invoiceNo, severity: "Error", message: refund ? "Missing credit note number." : "Missing invoice number." });
+      if (!invoiceDate) errors.push({ row, invoiceNo, severity: "Error", message: refund ? "Invalid or missing credit note date." : "Invalid or missing invoice date." });
+      if (refund && !config.refundVoucherType) errors.push({ row, invoiceNo, severity: "Error", message: "Refund voucher type is required." });
       if (!stockName) errors.push({ row, invoiceNo, severity: "Error", message: "Missing stock item name/SKU." });
       if (quantity <= 0) errors.push({ row, invoiceNo, severity: "Error", message: "Quantity must be greater than zero." });
-      if (taxable <= 0) errors.push({ row, invoiceNo, severity: "Error", message: "Tax Exclusive Gross must be greater than zero for Sales voucher rows." });
+      if (taxable <= 0) errors.push({ row, invoiceNo, severity: "Error", message: refund ? "Tax Exclusive Gross must be non-zero for Refund rows." : "Tax Exclusive Gross must be greater than zero for Sales voucher rows." });
       if (!partyLedger) errors.push({ row, invoiceNo, severity: "Error", message: "Missing party ledger." });
       if (!config.salesLedgerName) errors.push({ row, invoiceNo, severity: "Error", message: "Sales ledger is required." });
       if (cgst > 0 && !config.cgstLedgerName) errors.push({ row, invoiceNo, severity: "Error", message: "CGST ledger is required." });
@@ -359,7 +381,13 @@
       voucherLines.push({
         row,
         invoiceNo,
-        voucherNo: `${invoiceNo}${config.invoiceSuffix || ""}`,
+        sourceInvoiceNo,
+        creditNoteNo,
+        voucherNo: refund ? creditNoteNo : `${invoiceNo}${config.invoiceSuffix || ""}`,
+        voucherType: refund ? config.refundVoucherType : config.voucherType,
+        voucherKind: refund ? "Refund" : "Sale",
+        isCreditNote: refund,
+        referenceNo: refund ? creditNoteNo : String(record["Order Id"] || "").trim(),
         invoiceDate,
         orderDate,
         shipmentDate,
@@ -404,8 +432,9 @@
 
     const grouped = new Map();
     voucherLines.forEach((line) => {
-      if (!grouped.has(line.invoiceNo)) grouped.set(line.invoiceNo, []);
-      grouped.get(line.invoiceNo).push(line);
+      const key = `${line.voucherKind}\u001f${line.invoiceNo}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(line);
     });
 
     const vouchers = Array.from(grouped.values()).map((lines) => {
@@ -434,7 +463,13 @@
 
       return {
         invoiceNo: first.invoiceNo,
+        sourceInvoiceNo: first.sourceInvoiceNo,
+        creditNoteNo: first.creditNoteNo,
         voucherNo: first.voucherNo,
+        voucherType: first.voucherType,
+        voucherKind: first.voucherKind,
+        isCreditNote: first.isCreditNote,
+        referenceNo: first.referenceNo,
         invoiceDate: first.invoiceDate,
         orderDate: first.orderDate,
         shipmentDate: first.shipmentDate,
@@ -466,18 +501,23 @@
       };
     });
 
+    const signed = (voucher, value) => (voucher.isCreditNote ? -value : value);
     const summary = {
       totalRows: records.length,
       voucherCount: vouchers.length,
-      shipmentRows: voucherLines.length,
+      salesVoucherCount: vouchers.filter((voucher) => !voucher.isCreditNote).length,
+      refundVoucherCount: vouchers.filter((voucher) => voucher.isCreditNote).length,
+      shipmentRows: voucherLines.filter((line) => line.voucherKind === "Sale").length,
+      refundRows: voucherLines.filter((line) => line.voucherKind === "Refund").length,
       skippedRows: records.length - voucherLines.length,
       errorCount: errors.length,
       warningCount: warnings.length,
-      taxableTotal: round2(vouchers.reduce((sum, voucher) => sum + voucher.taxableTotal, 0)),
-      cgstTotal: round2(vouchers.reduce((sum, voucher) => sum + voucher.cgstTotal, 0)),
-      sgstTotal: round2(vouchers.reduce((sum, voucher) => sum + voucher.sgstTotal, 0)),
-      igstTotal: round2(vouchers.reduce((sum, voucher) => sum + voucher.igstTotal, 0)),
-      invoiceTotal: round2(vouchers.reduce((sum, voucher) => sum + voucher.invoiceTotal, 0)),
+      taxableTotal: round2(vouchers.reduce((sum, voucher) => sum + signed(voucher, voucher.taxableTotal), 0)),
+      cgstTotal: round2(vouchers.reduce((sum, voucher) => sum + signed(voucher, voucher.cgstTotal), 0)),
+      sgstTotal: round2(vouchers.reduce((sum, voucher) => sum + signed(voucher, voucher.sgstTotal), 0)),
+      igstTotal: round2(vouchers.reduce((sum, voucher) => sum + signed(voucher, voucher.igstTotal), 0)),
+      invoiceTotal: round2(vouchers.reduce((sum, voucher) => sum + signed(voucher, voucher.invoiceTotal), 0)),
+      refundTotal: round2(vouchers.filter((voucher) => voucher.isCreditNote).reduce((sum, voucher) => sum + voucher.invoiceTotal, 0)),
     };
 
     return { config, vouchers, errors, warnings, summary };
@@ -525,9 +565,11 @@
     return String(config.batchName || "").trim();
   }
 
-  function inventoryAllocationXml(item, config, indent) {
+  function inventoryAllocationXml(item, config, indent, isCreditNote) {
     const godown = godownNameFor(item, config);
     const batch = batchNameFor(config);
+    const amount = isCreditNote ? -item.taxable : item.taxable;
+    const deemedPositive = isCreditNote ? "Yes" : "No";
     const lines = [
       `${" ".repeat(indent)}<INVENTORYALLOCATIONS.LIST>`,
       xmlTag("STOCKITEMNAME", item.stockName, indent + 2),
@@ -540,10 +582,10 @@
       xmlTag("GSTRATEINFERAPPLICABILITY", "As per Masters/Company", indent + 2),
       item.hsn ? xmlTag("GSTHSNNAME", item.hsn, indent + 2) : "",
       xmlTag("GSTHSNINFERAPPLICABILITY", "As per Masters/Company", indent + 2),
-      xmlTag("ISDEEMEDPOSITIVE", "No", indent + 2),
-      xmlTag("ISLASTDEEMEDPOSITIVE", "No", indent + 2),
+      xmlTag("ISDEEMEDPOSITIVE", deemedPositive, indent + 2),
+      xmlTag("ISLASTDEEMEDPOSITIVE", deemedPositive, indent + 2),
       xmlTag("RATE", `${formatAmount(item.rate)}/${item.unitName}`, indent + 2),
-      xmlTag("AMOUNT", formatAmount(item.taxable), indent + 2),
+      xmlTag("AMOUNT", formatAmount(amount), indent + 2),
       xmlTag("ACTUALQTY", ` ${item.quantity} ${item.unitName}`, indent + 2),
       xmlTag("BILLEDQTY", ` ${item.quantity} ${item.unitName}`, indent + 2),
       godown || batch
@@ -551,7 +593,7 @@
             `${" ".repeat(indent + 2)}<BATCHALLOCATIONS.LIST>`,
             godown ? xmlTag("GODOWNNAME", godown, indent + 4) : "",
             batch ? xmlTag("BATCHNAME", batch, indent + 4) : "",
-            xmlTag("AMOUNT", formatAmount(item.taxable), indent + 4),
+            xmlTag("AMOUNT", formatAmount(amount), indent + 4),
             xmlTag("ACTUALQTY", ` ${item.quantity} ${item.unitName}`, indent + 4),
             xmlTag("BILLEDQTY", ` ${item.quantity} ${item.unitName}`, indent + 4),
             `${" ".repeat(indent + 2)}</BATCHALLOCATIONS.LIST>`,
@@ -570,6 +612,8 @@
   }
 
   function salesLedgerEntryXml(voucher, config, indent) {
+    const amount = voucher.isCreditNote ? -voucher.taxableTotal : voucher.taxableTotal;
+    const deemedPositive = voucher.isCreditNote ? "Yes" : "No";
     return [
       `${" ".repeat(indent)}<ALLLEDGERENTRIES.LIST>`,
       `${" ".repeat(indent + 2)}<OLDAUDITENTRYIDS.LIST TYPE="Number">`,
@@ -578,12 +622,12 @@
       xmlTag("LEDGERNAME", config.salesLedgerName, indent + 2),
       xmlTag("GSTCLASS", "Not Applicable", indent + 2),
       xmlTag("GSTOVRDNTYPEOFSUPPLY", "Goods", indent + 2),
-      xmlTag("ISDEEMEDPOSITIVE", "No", indent + 2),
+      xmlTag("ISDEEMEDPOSITIVE", deemedPositive, indent + 2),
       xmlTag("LEDGERFROMITEM", "No", indent + 2),
       xmlTag("ISPARTYLEDGER", "No", indent + 2),
-      xmlTag("ISLASTDEEMEDPOSITIVE", "No", indent + 2),
-      xmlTag("AMOUNT", formatAmount(voucher.taxableTotal), indent + 2),
-      ...voucher.lines.flatMap((item) => inventoryAllocationXml(item, config, indent + 2)),
+      xmlTag("ISLASTDEEMEDPOSITIVE", deemedPositive, indent + 2),
+      xmlTag("AMOUNT", formatAmount(amount), indent + 2),
+      ...voucher.lines.flatMap((item) => inventoryAllocationXml(item, config, indent + 2, voucher.isCreditNote)),
       ...rateDetailsXml("CGST", 0, indent + 2),
       ...rateDetailsXml("SGST/UTGST", 0, indent + 2),
       ...rateDetailsXml("IGST", 0, indent + 2),
@@ -594,9 +638,13 @@
   }
 
   function buildVoucherXml(voucher, config) {
+    const voucherType = voucher.voucherType || config.voucherType;
+    const partyAmount = voucher.isCreditNote ? voucher.invoiceTotal : -voucher.invoiceTotal;
+    const partyIsDeemedPositive = !voucher.isCreditNote;
+    const referenceNo = voucher.referenceNo || voucher.orderId;
     const lines = [
       '      <TALLYMESSAGE xmlns:UDF="TallyUDF">',
-      `        <VOUCHER VCHTYPE="${xmlEscape(config.voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">`,
+      `        <VOUCHER VCHTYPE="${xmlEscape(voucherType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">`,
       ...xmlList(
         "ADDRESS.LIST",
         "ADDRESS",
@@ -618,7 +666,7 @@
       xmlTag("REFERENCEDATE", voucher.invoiceDate, 10),
       xmlTag("VCHSTATUSDATE", voucher.invoiceDate, 10),
       xmlTag("GSTREGISTRATIONTYPE", voucher.gstRegistrationType, 10),
-      xmlTag("VOUCHERTYPENAME", config.voucherType, 10),
+      xmlTag("VOUCHERTYPENAME", voucherType, 10),
       xmlTag("PARTYNAME", voucher.partyLedger, 10),
       config.gstRegistrationName && voucher.lines[0]?.sellerGstin
         ? `          <GSTREGISTRATION TAXTYPE="GST" TAXREGISTRATION="${xmlEscape(voucher.lines[0].sellerGstin)}">${xmlEscape(config.gstRegistrationName)}</GSTREGISTRATION>`
@@ -628,7 +676,7 @@
       voucher.billToGstin ? xmlTag("PARTYGSTIN", voucher.billToGstin, 10) : "",
       xmlTag("VOUCHERNUMBER", voucher.voucherNo, 10),
       xmlTag("CMPGSTREGISTRATIONTYPE", "Regular", 10),
-      xmlTag("REFERENCE", voucher.orderId, 10),
+      xmlTag("REFERENCE", referenceNo, 10),
       xmlTag("PARTYMAILINGNAME", voucher.partyLedger, 10),
       xmlTag("PARTYPINCODE", voucher.billToPostalCode, 10),
       xmlTag("CONSIGNEEPINCODE", voucher.shipToPostalCode, 10),
@@ -640,7 +688,7 @@
       xmlTag("PLACEOFSUPPLY", voucher.placeOfSupply, 10),
       xmlTag("NUMBERINGSTYLE", "Manual", 10),
       xmlTag("PERSISTEDVIEW", "Accounting Voucher View", 10),
-      xmlTag("VCHSTATUSVOUCHERTYPE", config.voucherType, 10),
+      xmlTag("VCHSTATUSVOUCHERTYPE", voucherType, 10),
       config.gstRegistrationName ? xmlTag("VCHSTATUSTAXUNIT", config.gstRegistrationName, 10) : "",
       xmlTag("VCHENTRYMODE", "Item Invoice", 10),
       xmlTag("EFFECTIVEDATE", voucher.invoiceDate, 10),
@@ -660,24 +708,26 @@
     const billAllocations = config.includeBillAllocations
       ? [
           "          <BILLALLOCATIONS.LIST>",
-          xmlTag("NAME", voucher.orderId || voucher.voucherNo, 12),
+          xmlTag("NAME", referenceNo || voucher.voucherNo, 12),
           xmlTag("BILLTYPE", "New Ref", 12),
           xmlTag("TDSDEDUCTEEISSPECIALRATE", "No", 12),
-          xmlTag("AMOUNT", `-${formatAmount(voucher.invoiceTotal)}`, 12),
+          xmlTag("AMOUNT", formatAmount(partyAmount), 12),
           "          </BILLALLOCATIONS.LIST>",
         ]
       : [];
 
     const ledgerLines = [
-      ...ledgerEntryXml(voucher.partyLedger, true, -voucher.invoiceTotal, 10, billAllocations),
+      ...ledgerEntryXml(voucher.partyLedger, partyIsDeemedPositive, partyAmount, 10, billAllocations),
       ...salesLedgerEntryXml(voucher, config, 10),
     ];
 
-    if (voucher.cgstTotal) ledgerLines.push(...ledgerEntryXml(config.cgstLedgerName, false, voucher.cgstTotal, 10));
-    if (voucher.sgstTotal) ledgerLines.push(...ledgerEntryXml(config.sgstLedgerName, false, voucher.sgstTotal, 10));
-    if (voucher.igstTotal) ledgerLines.push(...ledgerEntryXml(config.igstLedgerName, false, voucher.igstTotal, 10));
+    const taxSign = voucher.isCreditNote ? -1 : 1;
+    if (voucher.cgstTotal) ledgerLines.push(...ledgerEntryXml(config.cgstLedgerName, voucher.isCreditNote, taxSign * voucher.cgstTotal, 10));
+    if (voucher.sgstTotal) ledgerLines.push(...ledgerEntryXml(config.sgstLedgerName, voucher.isCreditNote, taxSign * voucher.sgstTotal, 10));
+    if (voucher.igstTotal) ledgerLines.push(...ledgerEntryXml(config.igstLedgerName, voucher.isCreditNote, taxSign * voucher.igstTotal, 10));
     if (voucher.roundOff) {
-      ledgerLines.push(...ledgerEntryXml(config.roundOffLedgerName, voucher.roundOff < 0, voucher.roundOff, 10));
+      const roundOffAmount = voucher.isCreditNote ? -voucher.roundOff : voucher.roundOff;
+      ledgerLines.push(...ledgerEntryXml(config.roundOffLedgerName, roundOffAmount < 0, roundOffAmount, 10));
     }
 
     if (voucher.orderId) {
@@ -746,7 +796,8 @@
 
   function previewRows(vouchers, limit = 100) {
     return vouchers.slice(0, limit).map((voucher) => ({
-      invoiceNo: voucher.invoiceNo,
+      invoiceNo: voucher.isCreditNote ? voucher.sourceInvoiceNo : voucher.invoiceNo,
+      type: voucher.voucherKind,
       voucherNo: voucher.voucherNo,
       date: voucher.invoiceDate,
       partyLedger: voucher.partyLedger,
@@ -784,7 +835,10 @@
         summary: {
           totalRows: records.length,
           voucherCount: 0,
+          salesVoucherCount: 0,
+          refundVoucherCount: 0,
           shipmentRows: 0,
+          refundRows: 0,
           skippedRows: records.length,
           errorCount: missingColumns.length,
           warningCount: 0,
@@ -793,6 +847,7 @@
           sgstTotal: 0,
           igstTotal: 0,
           invoiceTotal: 0,
+          refundTotal: 0,
         },
         xml: "",
         reportCsv: "",

@@ -749,7 +749,7 @@ button:disabled {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  grid-template-columns: repeat(5, minmax(105px, 1fr));
   gap: 10px;
   padding: 0 18px 18px;
 }

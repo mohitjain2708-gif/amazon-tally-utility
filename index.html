@@ -171,6 +171,10 @@
                     <input name="voucherType" value="Sales - Amazon" autocomplete="off">
                   </label>
                   <label>
+                    <span>Refund voucher type</span>
+                    <input name="refundVoucherType" value="Credit Note" autocomplete="off">
+                  </label>
+                  <label>
                     <span>Invoice suffix</span>
                     <input name="invoiceSuffix" value="/A" autocomplete="off">
                   </label>
@@ -288,11 +292,15 @@
                 <strong>0</strong>
               </div>
               <div class="metric">
+                <span>Refund vouchers</span>
+                <strong>0</strong>
+              </div>
+              <div class="metric">
                 <span>Issues found</span>
                 <strong>0</strong>
               </div>
               <div class="metric">
-                <span>Invoice total</span>
+                <span>Net total</span>
                 <strong>0.00</strong>
               </div>
             </div>
@@ -302,7 +310,7 @@
             <div class="panel-title">
               <div>
                 <h2>Voucher Preview</h2>
-                <p>First 100 generated Sales vouchers.</p>
+                <p>First 100 generated vouchers.</p>
               </div>
               <span class="soft-count">Review before import</span>
             </div>
@@ -311,6 +319,7 @@
                 <thead>
                   <tr>
                     <th>Invoice</th>
+                    <th>Type</th>
                     <th>Voucher no.</th>
                     <th>Date</th>
                     <th>Party ledger</th>
@@ -325,7 +334,7 @@
                   </tr>
                 </thead>
                 <tbody data-preview-body>
-                  <tr><td colspan="12" class="empty">No vouchers generated yet.</td></tr>
+                  <tr><td colspan="13" class="empty">No vouchers generated yet.</td></tr>
                 </tbody>
               </table>
             </div>

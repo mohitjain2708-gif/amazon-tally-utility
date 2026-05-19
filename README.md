@@ -38,8 +38,9 @@ Important for public trials:
 
 - Source formats: Amazon GST MTR B2C CSV and B2B CSV.
 - Voucher type generated: Sales.
-- Included rows: `Transaction Type = Shipment`.
-- Skipped rows: `Refund` and `Cancel`, shown in the validation report.
+- Included rows: `Transaction Type = Shipment` and `Transaction Type = Refund`.
+- Refund rows are generated as Tally `Credit Note` vouchers by default, using Amazon `Credit Note No` and `Credit Note Date`.
+- Skipped rows: unsupported transaction types such as `Cancel`, shown in the validation report.
 - Party ledger can be auto-detected: B2B uses `B2B Amazon Sales`, B2C uses `B2C Amazon Sales`.
 - Sales ledger is selected by the user and applied to every inventory allocation.
 - B2B buyer name and GSTIN are still written into buyer/consignee/GST fields where available.

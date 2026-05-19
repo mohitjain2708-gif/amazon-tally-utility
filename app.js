@@ -31,10 +31,11 @@ function renderEmptyState() {
   els.summary.innerHTML = `
     <div class="metric"><span>Total transactions</span><strong>0</strong></div>
     <div class="metric"><span>Sales vouchers</span><strong>0</strong></div>
+    <div class="metric"><span>Refund vouchers</span><strong>0</strong></div>
     <div class="metric"><span>Issues found</span><strong>0</strong></div>
-    <div class="metric"><span>Invoice total</span><strong>0.00</strong></div>
+    <div class="metric"><span>Net total</span><strong>0.00</strong></div>
   `;
-  els.previewBody.innerHTML = '<tr><td colspan="12" class="empty">Upload a CSV and validate it to see voucher details here.</td></tr>';
+  els.previewBody.innerHTML = '<tr><td colspan="13" class="empty">Upload a CSV and validate it to see voucher details here.</td></tr>';
   els.issuesBody.innerHTML = '<tr><td colspan="4" class="empty">Validation messages will appear here after preview.</td></tr>';
 }
 
@@ -46,6 +47,7 @@ function readConfig() {
     b2bPartyLedgerName: formData.get("b2bPartyLedgerName").trim(),
     partyLedgerPrefix: formData.get("partyLedgerPrefix").trim(),
     voucherType: formData.get("voucherType").trim(),
+    refundVoucherType: formData.get("refundVoucherType").trim(),
     companyName: formData.get("companyName").trim(),
     gstRegistrationName: formData.get("gstRegistrationName").trim(),
     companyGstState: formData.get("companyGstState").trim(),
@@ -106,6 +108,7 @@ function setField(name, value) {
 function applyLearnedMapping(config) {
   [
     "voucherType",
+    "refundVoucherType",
     "companyName",
     "invoiceSuffix",
     "partyLedgerMode",
@@ -128,16 +131,17 @@ function renderLearningSummary(result) {
     <strong>${result.summary.learnedItemMappings}</strong> item mappings,
     <strong>${result.summary.tallySalesVouchers}</strong> Tally Sales vouchers found.
     <br>
-    Learned: ${escapeHtml(result.config.voucherType)}, B2B ${escapeHtml(result.config.b2bPartyLedgerName)}, B2C ${escapeHtml(result.config.partyLedgerName)}, ${escapeHtml(result.config.salesLedgerName)}.
+    Learned: ${escapeHtml(result.config.voucherType)}, refunds ${escapeHtml(result.config.refundVoucherType)}, B2B ${escapeHtml(result.config.b2bPartyLedgerName)}, B2C ${escapeHtml(result.config.partyLedgerName)}, ${escapeHtml(result.config.salesLedgerName)}.
   `;
 }
 
 function renderSummary(summary, errors = [], warnings = []) {
   const cards = [
     ["Total transactions", summary.totalRows],
-    ["Sales vouchers", summary.voucherCount],
+    ["Sales vouchers", summary.salesVoucherCount ?? summary.voucherCount],
+    ["Refund vouchers", summary.refundVoucherCount || 0],
     ["Issues found", errors.length + warnings.length],
-    ["Invoice total", AmazonTallyConverter.formatAmount(summary.invoiceTotal)],
+    ["Net total", AmazonTallyConverter.formatAmount(summary.invoiceTotal)],
   ];
 
   els.summary.innerHTML = cards
@@ -153,6 +157,7 @@ function renderPreview(rows) {
       (row) => `
         <tr>
           <td>${escapeHtml(row.invoiceNo)}</td>
+          <td>${escapeHtml(row.type)}</td>
           <td>${escapeHtml(row.voucherNo)}</td>
           <td>${escapeHtml(row.date)}</td>
           <td>${escapeHtml(row.partyLedger)}</td>
@@ -168,7 +173,7 @@ function renderPreview(rows) {
       `
     )
     .join("")
-    : '<tr><td colspan="12" class="empty">No vouchers were generated from this file.</td></tr>';
+    : '<tr><td colspan="13" class="empty">No vouchers were generated from this file.</td></tr>';
 }
 
 function renderIssues(errors, warnings) {
@@ -216,7 +221,7 @@ function processFile() {
       setStatus(
         hasErrors
           ? `Found ${currentResult.errors.length} error(s). Fix them before importing into Tally.`
-          : `Generated ${currentResult.summary.voucherCount} Sales voucher(s). Review the preview, then download XML.`,
+          : `Generated ${currentResult.summary.voucherCount} voucher(s), including ${currentResult.summary.refundVoucherCount || 0} refund voucher(s). Review the preview, then download XML.`,
         hasErrors ? "bad" : "good"
       );
     } catch (error) {

@@ -1,6 +1,7 @@
 window.AMAZON_TALLY_LEARNED_MAPPING = {
   companyName: "",
   voucherType: "Sales - Amazon",
+  refundVoucherType: "Credit Note",
   invoiceNumberRule: "voucher_number = amazon_invoice_number",
   referenceRule: "reference = amazon_order_id",
   invoiceSuffix: "",
