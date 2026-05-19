@@ -64,6 +64,91 @@
     return match ? match[1] : "";
   }
 
+  function looksLikeSellerOrFooterLine(line) {
+    return [
+      /^GST\s+Registration\s+No\s*:\s*[0-9A-Z]{15}\s*$/i,
+      /^State\/UT\s+Code\s*:/i,
+      /^Place\s+of\s+(supply|delivery)\s*:/i,
+      /^Order\s+(No|Number)\s*:/i,
+      /^Invoice\s+(Number|Date|Details)\s*:/i,
+      /^Credit\s+Note\s+(No|Date)\s*:/i,
+      /^Original\s+(Invoice|Order)\s+/i,
+      /^Sl\.?\s*Tax/i,
+      /^Description\s+Unit\s+Price/i,
+      /^No\s+Rate\s+Type\s+Amount/i,
+      /^\d+\s+.+\s+[A-Z0-9-]{8,}/i,
+      /^HSN\s*:/i,
+      /^TOTAL\s*:/i,
+      /^Amount\s+in\s+Words\s*:/i,
+      /^For\s+Mangal\s+Maitri\s+Multitrade\s+LLP/i,
+      /^Authorized\s+Signatory/i,
+      /^\*?ASSPL-/i,
+      /^Customers\s+desirous/i,
+      /^Please\s+note\s+that/i,
+      /^Page\s+\d+\s+of\s+\d+/i,
+      /^PAN\s+No\s*:/i,
+      /^IN\s+State\/UT\s+Code\s*:/i,
+      /^Mangal\s+Maitri\s+Multitrade\s+LLP\b/i,
+      /^\*?\s*LIMITED\s*$/i,
+      /PRIVATE\s*$/i,
+    ].some((pattern) => pattern.test(line));
+  }
+
+  function looksLikeAddressBlockEnd(line) {
+    return [
+      /^Place\s+of\s+(supply|delivery)\s*:/i,
+      /^Order\s+(No|Number)\s*:/i,
+      /^Invoice\s+(Number|Date|Details)\s*:/i,
+      /^Credit\s+Note\s+(No|Date)\s*:/i,
+      /^Original\s+(Invoice|Order)\s+/i,
+      /^Sl\.?\s*Tax/i,
+      /^Description\s+Unit\s+Price/i,
+      /^No\s+Rate\s+Type\s+Amount/i,
+      /^\d+\s+\S+/,
+      /^HSN\s*:/i,
+      /^TOTAL\s*:/i,
+      /^Amount\s+in\s+Words\s*:/i,
+      /^For\s+Mangal\s+Maitri\s+Multitrade\s+LLP/i,
+      /^Authorized\s+Signatory/i,
+      /^\*?ASSPL-/i,
+      /^Customers\s+desirous/i,
+      /^Please\s+note\s+that/i,
+      /^Page\s+\d+\s+of\s+\d+/i,
+    ].some((pattern) => pattern.test(line));
+  }
+
+  function removeSellerPrefix(line) {
+    return compact(line).replace(/^Mangal\s+Maitri\s+Multitrade\s+LLP\s+/i, "").trim();
+  }
+
+  function cleanAddressLines(lines) {
+    const cleaned = [];
+    const seen = new Set();
+
+    for (const rawLine of lines || []) {
+      let line = removeSellerPrefix(rawLine);
+      line = line.replace(/^GST\s+Registration\s+No\s*:\s*[0-9A-Z]{15}\s*/i, "").trim();
+      if (looksLikeAddressBlockEnd(line)) {
+        if (cleaned.length) break;
+        continue;
+      }
+      if (!line || looksLikeSellerOrFooterLine(line)) continue;
+      line = line.replace(/\s+/g, " ").trim();
+      if (!line) continue;
+
+      const normalized = line.toUpperCase();
+      if (normalized === "INDIA") line = "IN";
+      if (normalized === "IN" && cleaned[cleaned.length - 1] === "IN") continue;
+      if (seen.has(normalized)) continue;
+
+      seen.add(normalized);
+      cleaned.push(line);
+      if (cleaned.length >= 7) break;
+    }
+
+    return cleaned;
+  }
+
   function stripTrailingPlaceLabel(value) {
     return compact(value).replace(/\s+Place\s+of\s+(delivery|supply).*$/i, "").trim();
   }
@@ -74,8 +159,10 @@
     const orderId = tagValue(text, /Order\s+Number\s*:?\s*([0-9-]+)/i);
     const invoiceDate = tagValue(text, /Invoice\s+Date\s*:?\s*([0-9.]+)/i);
     const orderDate = tagValue(text, /Order\s+Date\s*:?\s*([0-9.]+)/i);
-    const billingAddressLines = extractBlock(text, "Billing Address", "Shipping Address");
-    const shippingAddressLines = extractBlock(text, "Shipping Address", "Place of supply");
+    const rawBillingAddressLines = extractBlock(text, "Billing Address", "Shipping Address");
+    const rawShippingAddressLines = extractBlock(text, "Shipping Address", "Place of supply");
+    const billingAddressLines = cleanAddressLines(rawBillingAddressLines);
+    const shippingAddressLines = cleanAddressLines(rawShippingAddressLines);
     const placeOfSupply = stripTrailingPlaceLabel(tagValue(text, /Place\s+of\s+supply\s*:?\s*([A-Z ]+(?:\s+Place\s+of\s+delivery)?)/i));
     const placeOfDelivery = stripTrailingPlaceLabel(tagValue(text, /Place\s+of\s+delivery\s*:?\s*([A-Z ]+)/i));
 
@@ -89,12 +176,12 @@
       shippingAddressLines,
       billingName: billingAddressLines[0] || "",
       shippingName: shippingAddressLines[0] || "",
-      billingGstin: gstinFrom(billingAddressLines),
-      shippingGstin: gstinFrom(shippingAddressLines),
+      billingGstin: gstinFrom(rawBillingAddressLines),
+      shippingGstin: gstinFrom(rawShippingAddressLines),
       billingPostalCode: pinFrom(billingAddressLines),
       shippingPostalCode: pinFrom(shippingAddressLines),
-      billingStateCode: stateCodeFrom(billingAddressLines),
-      shippingStateCode: stateCodeFrom(shippingAddressLines),
+      billingStateCode: stateCodeFrom(rawBillingAddressLines),
+      shippingStateCode: stateCodeFrom(rawShippingAddressLines),
       placeOfSupply,
       placeOfDelivery,
       hasBillingAddress: billingAddressLines.length > 0,

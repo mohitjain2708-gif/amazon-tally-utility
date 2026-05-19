@@ -797,8 +797,8 @@
       xmlTag("VCHENTRYMODE", "Item Invoice", 10),
       xmlTag("EFFECTIVEDATE", voucher.invoiceDate, 10),
       xmlTag("ISINVOICE", "Yes", 10),
-      xmlTag("BASICBUYERNAME", voucher.billToName || voucher.buyerName || voucher.partyLedger, 10),
-      xmlTag("CONSIGNEEMAILINGNAME", voucher.shipToName || voucher.partyLedger, 10),
+      xmlTag("BASICBUYERNAME", voucher.partyLedger, 10),
+      xmlTag("CONSIGNEEMAILINGNAME", voucher.partyLedger, 10),
       xmlTag("CONSIGNEECOUNTRYNAME", voucher.shipToCountry || "India", 10),
       ...xmlList(
         "CONSIGNEEADDRESS.LIST",
