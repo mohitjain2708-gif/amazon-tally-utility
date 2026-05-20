@@ -1,14 +1,19 @@
 const els = {
   dropZone: document.querySelector("[data-drop-zone]"),
   pdfDropZone: document.querySelector("[data-pdf-drop-zone]"),
+  settlementDropZone: document.querySelector("[data-settlement-drop-zone]"),
   fileInput: document.querySelector("#fileInput"),
   pdfZipInput: document.querySelector("#pdfZipInput"),
+  settlementInput: document.querySelector("#settlementInput"),
   fileName: document.querySelector("[data-file-name]"),
   pdfFileName: document.querySelector("[data-pdf-file-name]"),
+  settlementFileName: document.querySelector("[data-settlement-file-name]"),
   pdfSummary: document.querySelector("[data-pdf-summary]"),
   csvUploadStatus: document.querySelector("[data-csv-upload-status]"),
   pdfUploadStatus: document.querySelector("[data-pdf-upload-status]"),
+  settlementStatus: document.querySelector("[data-settlement-status]"),
   processButton: document.querySelector("#processButton"),
+  processSettlementButton: document.querySelector("#processSettlementButton"),
   status: document.querySelector("[data-status]"),
   summary: document.querySelector("[data-summary]"),
   dateFilter: document.querySelector("[data-date-filter]"),
@@ -24,6 +29,10 @@ const els = {
   issuesBody: document.querySelector("[data-issues-body]"),
   xmlButton: document.querySelector("#downloadXml"),
   reportButton: document.querySelector("#downloadReport"),
+  settlementXmlButton: document.querySelector("#downloadSettlementXml"),
+  settlementReportButton: document.querySelector("#downloadSettlementReport"),
+  settlementSummary: document.querySelector("[data-settlement-summary]"),
+  settlementPreviewBody: document.querySelector("[data-settlement-preview-body]"),
   historyCsvInput: document.querySelector("#historyCsvInput"),
   daybookInput: document.querySelector("#daybookInput"),
   analyzeHistoryButton: document.querySelector("#analyzeHistoryButton"),
@@ -35,8 +44,10 @@ const els = {
 
 let currentSalesFiles = [];
 let currentPdfFiles = [];
+let currentSettlementFiles = [];
 let currentAddressIndex = null;
 let currentResult = null;
+let currentSettlementResult = null;
 let currentCsvText = "";
 let currentBaseConfig = null;
 let fullDateRange = { from: "", to: "" };
@@ -92,6 +103,26 @@ function readConfig() {
   };
 }
 
+function readSettlementConfig(orderClassifications = {}) {
+  const formData = new FormData(els.configForm);
+  return {
+    companyName: formData.get("companyName").trim(),
+    settlementVoucherType: formData.get("settlementVoucherType").trim() || "Journal",
+    settlementVoucherNumberStart: formData.get("settlementVoucherNumberStart").trim(),
+    settlementPartyLedgerName: formData.get("settlementPartyLedgerName").trim(),
+    feeLedgerBlrName: formData.get("feeLedgerBlrName").trim(),
+    feeLedgerDelName: formData.get("feeLedgerDelName").trim(),
+    tcsLedgerName: formData.get("tcsLedgerName").trim(),
+    tdsLedgerName: formData.get("tdsLedgerName").trim(),
+    reimbursementLedgerName: formData.get("reimbursementLedgerName").trim(),
+    otherChargesLedgerName: formData.get("otherChargesLedgerName").trim(),
+    roundOffLedgerName: formData.get("roundOffLedgerName").trim(),
+    b2bPartyLedgerName: formData.get("b2bPartyLedgerName").trim(),
+    partyLedgerName: formData.get("partyLedgerName").trim(),
+    orderClassifications,
+  };
+}
+
 function plural(count, singular, pluralText = `${singular}s`) {
   return `${count} ${count === 1 ? singular : pluralText}`;
 }
@@ -142,6 +173,33 @@ function selectPdfFiles(files) {
   currentResult = null;
   els.xmlButton.disabled = true;
   els.reportButton.disabled = true;
+}
+
+function selectSettlementFiles(files) {
+  currentSettlementFiles = Array.from(files || []).filter((file) => /\.(xlsx|xls)$/i.test(file.name));
+  currentSettlementResult = null;
+  if (els.settlementFileName) {
+    els.settlementFileName.textContent = selectedFilesLabel(currentSettlementFiles, "Choose settlement Excel files");
+  }
+  if (els.settlementDropZone) {
+    els.settlementDropZone.classList.toggle("has-file", currentSettlementFiles.length > 0);
+  }
+  if (els.processSettlementButton) els.processSettlementButton.disabled = !currentSettlementFiles.length;
+  if (els.settlementXmlButton) els.settlementXmlButton.disabled = true;
+  if (els.settlementReportButton) els.settlementReportButton.disabled = true;
+  if (els.settlementStatus) {
+    els.settlementStatus.innerHTML = currentSettlementFiles.length
+      ? `${statusIcon()} ${plural(currentSettlementFiles.length, "settlement file")} selected`
+      : `${statusIcon()} Waiting for settlement report`;
+  }
+  if (els.settlementSummary) {
+    els.settlementSummary.textContent = currentSettlementFiles.length
+      ? "Ready to validate the enriched settlement workbook and generate Journal XML."
+      : "Upload a settlement report to see payout, sales ledger clearing, fees, TCS, and TDS.";
+  }
+  if (els.settlementPreviewBody) {
+    els.settlementPreviewBody.innerHTML = '<tr><td colspan="10" class="empty">Settlement preview will appear here after validation.</td></tr>';
+  }
 }
 
 function downloadText(filename, content, mimeType) {
@@ -280,6 +338,63 @@ async function readSalesFilesAsCsvText(files) {
   return rowsToCsv(mergedRows);
 }
 
+function recordsFromRows(rows, source = "") {
+  if (!rows.length) return [];
+  const headers = rows[0].map((header) => String(header).trim());
+  return rows.slice(1).map((row) => {
+    const record = { __sourceFile: source };
+    headers.forEach((header, index) => {
+      record[header] = row[index] == null ? "" : row[index];
+    });
+    return record;
+  });
+}
+
+async function readSettlementFileRecords(file) {
+  if (/\.(xlsx|xls)$/i.test(file.name)) {
+    if (!window.XLSX) throw new Error("Excel parser library is not loaded.");
+    const workbook = XLSX.read(await readFileAsArrayBuffer(file), { type: "array" });
+    const records = [];
+    workbook.SheetNames.forEach((sheetName) => {
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "", raw: false });
+      records.push(...recordsFromRows(rows, `${file.name} / ${sheetName}`));
+    });
+    return records;
+  }
+  const parsed = AmazonSettlementConverter.parseText(await readFileAsText(file));
+  return parsed.records.map((record) => ({ ...record, __sourceFile: file.name }));
+}
+
+async function readSettlementFilesRecords(files) {
+  const recordGroups = await Promise.all(files.map(readSettlementFileRecords));
+  return recordGroups.flat();
+}
+
+function inferSalesFileChannel(file) {
+  const name = String(file.name || "").toUpperCase();
+  if (name.includes("B2B")) return "B2B";
+  if (name.includes("B2C")) return "B2C";
+  return "";
+}
+
+async function buildOrderClassificationsFromSalesFiles(files) {
+  const classifications = {};
+  const texts = await Promise.all(files.map(async (file) => ({ file, text: await readSalesFileAsCsv(file) })));
+  texts.forEach(({ file, text }) => {
+    const channel = inferSalesFileChannel(file);
+    const rows = parseCsvRows(text);
+    if (!rows.length) return;
+    const headers = rows[0].map((header) => String(header).trim());
+    const orderIndex = headers.findIndex((header) => header.toLowerCase() === "order id");
+    if (orderIndex < 0 || !channel) return;
+    rows.slice(1).forEach((row) => {
+      const orderId = String(row[orderIndex] || "").trim();
+      if (orderId) classifications[orderId] = channel;
+    });
+  });
+  return classifications;
+}
+
 function setField(name, value) {
   const field = els.configForm.elements[name];
   if (!field || value == null) return;
@@ -411,6 +526,55 @@ function renderIssues(errors, warnings) {
     : '<tr><td colspan="4" class="empty">No validation issues found.</td></tr>';
 }
 
+function renderSettlementResult(result) {
+  currentSettlementResult = result;
+  const warnings = result.warnings || [];
+  const errors = result.errors || [];
+  if (els.settlementSummary) {
+    els.settlementSummary.innerHTML = `
+      <strong>${result.summary.settlementCount}</strong> settlement voucher(s) ready,
+      payout <strong>Rs. ${AmazonSettlementConverter.formatAmount(result.summary.totalPayout)}</strong>,
+      warnings <strong>${warnings.length}</strong>,
+      errors <strong>${errors.length}</strong>.
+    `;
+  }
+  if (els.settlementPreviewBody) {
+    els.settlementPreviewBody.innerHTML = result.preview.length
+      ? result.preview
+          .map(
+            (row) => `
+              <tr>
+                <td>${escapeHtml(row.settlementId)}</td>
+                <td>${escapeHtml(row.date)}</td>
+                <td class="num">${escapeHtml(row.payout)}</td>
+                <td class="num">${escapeHtml(row.sales)}</td>
+                <td class="num">${escapeHtml(row.b2bSales)}</td>
+                <td class="num">${escapeHtml(row.b2cSales)}</td>
+                <td class="num">${escapeHtml(row.fees)}</td>
+                <td class="num">${escapeHtml(row.tcs)}</td>
+                <td class="num">${escapeHtml(row.tds)}</td>
+                <td class="num">${escapeHtml(row.orders)}</td>
+              </tr>
+            `
+          )
+          .join("")
+      : '<tr><td colspan="10" class="empty">No settlement vouchers were generated.</td></tr>';
+  }
+  if (els.settlementXmlButton) els.settlementXmlButton.disabled = errors.length > 0 || !result.xml;
+  if (els.settlementReportButton) els.settlementReportButton.disabled = !result.reportCsv;
+  if (els.settlementStatus) {
+    els.settlementStatus.innerHTML = errors.length
+      ? `${statusIcon()} ${errors.length} settlement error(s) need review`
+      : `${statusIcon()} Settlement Journal XML is ready`;
+  }
+  setStatus(
+    errors.length
+      ? `Settlement validation found ${errors.length} error(s).`
+      : `Settlement XML ready: ${result.summary.settlementCount} Journal voucher(s), payout Rs. ${AmazonSettlementConverter.formatAmount(result.summary.totalPayout)}.`,
+    errors.length ? "bad" : "good"
+  );
+}
+
 function setupDateFilter(summary) {
   const minDate = tallyDateToInputDate(summary.minVoucherDate);
   const maxDate = tallyDateToInputDate(summary.maxVoucherDate);
@@ -530,9 +694,33 @@ async function processFile() {
   }
 }
 
+async function processSettlementFile() {
+  if (!currentSettlementFiles.length) return;
+  try {
+    if (!window.AmazonSettlementConverter) throw new Error("Settlement converter is not available.");
+    setStatus("Reading settlement report...");
+    els.processSettlementButton.disabled = true;
+    const [records, orderClassifications] = await Promise.all([
+      readSettlementFilesRecords(currentSettlementFiles),
+      currentSalesFiles.length ? buildOrderClassificationsFromSalesFiles(currentSalesFiles) : Promise.resolve({}),
+    ]);
+    const result = AmazonSettlementConverter.convertRecords(records, readSettlementConfig(orderClassifications));
+    renderSettlementResult(result);
+  } catch (error) {
+    setStatus(`Could not process settlement file: ${error.message}`, "bad");
+    if (els.settlementXmlButton) els.settlementXmlButton.disabled = true;
+    if (els.settlementReportButton) els.settlementReportButton.disabled = true;
+    if (els.settlementStatus) els.settlementStatus.innerHTML = `${statusIcon()} Settlement processing failed`;
+  } finally {
+    els.processSettlementButton.disabled = !currentSettlementFiles.length;
+  }
+}
+
 els.fileInput.addEventListener("change", (event) => selectSalesFiles(event.target.files));
 els.pdfZipInput.addEventListener("change", (event) => selectPdfFiles(event.target.files));
+if (els.settlementInput) els.settlementInput.addEventListener("change", (event) => selectSettlementFiles(event.target.files));
 els.processButton.addEventListener("click", processFile);
+if (els.processSettlementButton) els.processSettlementButton.addEventListener("click", processSettlementFile);
 if (els.dateFrom) els.dateFrom.addEventListener("change", applyDateFilter);
 if (els.dateTo) els.dateTo.addEventListener("change", applyDateFilter);
 if (els.dateReset) {
@@ -576,6 +764,23 @@ els.pdfDropZone.addEventListener("drop", (event) => {
   if (event.dataTransfer.files.length) selectPdfFiles(event.dataTransfer.files);
 });
 
+if (els.settlementDropZone) {
+  els.settlementDropZone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    els.settlementDropZone.classList.add("dragging");
+  });
+
+  els.settlementDropZone.addEventListener("dragleave", () => {
+    els.settlementDropZone.classList.remove("dragging");
+  });
+
+  els.settlementDropZone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    els.settlementDropZone.classList.remove("dragging");
+    if (event.dataTransfer.files.length) selectSettlementFiles(event.dataTransfer.files);
+  });
+}
+
 els.xmlButton.addEventListener("click", () => {
   if (!currentResult || !currentResult.xml) return;
   downloadText("amazon-sales-tally.xml", currentResult.xml, "application/xml;charset=utf-8");
@@ -585,6 +790,20 @@ els.reportButton.addEventListener("click", () => {
   if (!currentResult || !currentResult.reportCsv) return;
   downloadText("amazon-sales-import-report.csv", currentResult.reportCsv, "text/csv;charset=utf-8");
 });
+
+if (els.settlementXmlButton) {
+  els.settlementXmlButton.addEventListener("click", () => {
+    if (!currentSettlementResult || !currentSettlementResult.xml) return;
+    downloadText("amazon-settlement-tally.xml", currentSettlementResult.xml, "application/xml;charset=utf-8");
+  });
+}
+
+if (els.settlementReportButton) {
+  els.settlementReportButton.addEventListener("click", () => {
+    if (!currentSettlementResult || !currentSettlementResult.reportCsv) return;
+    downloadText("amazon-settlement-report.csv", currentSettlementResult.reportCsv, "text/csv;charset=utf-8");
+  });
+}
 
 els.analyzeHistoryButton.addEventListener("click", async () => {
   const csvFiles = Array.from(els.historyCsvInput.files || []);

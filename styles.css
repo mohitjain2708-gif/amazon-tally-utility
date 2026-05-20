@@ -340,7 +340,8 @@ button:disabled {
 .preview-panel,
 .validation-panel,
 .settings-panel,
-.trainer-panel {
+.trainer-panel,
+.settlement-panel {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.92);
@@ -552,7 +553,8 @@ button:disabled {
 }
 
 .settings-panel,
-.trainer-panel {
+.trainer-panel,
+.settlement-panel {
   order: 5;
   overflow: hidden;
   margin-bottom: 18px;
@@ -562,8 +564,13 @@ button:disabled {
   order: 6;
 }
 
+.settlement-panel {
+  order: 7;
+}
+
 .settings-panel summary,
 .trainer-panel summary,
+.settlement-panel summary,
 .advanced summary,
 .validation-log summary {
   cursor: pointer;
@@ -572,13 +579,15 @@ button:disabled {
 
 .settings-panel summary::-webkit-details-marker,
 .trainer-panel summary::-webkit-details-marker,
+.settlement-panel summary::-webkit-details-marker,
 .advanced summary::-webkit-details-marker,
 .validation-log summary::-webkit-details-marker {
   display: none;
 }
 
 .settings-panel > details > summary,
-.trainer-panel > summary {
+.trainer-panel > summary,
+.settlement-panel > summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -586,7 +595,8 @@ button:disabled {
 }
 
 .settings-panel > details > summary span,
-.trainer-panel > summary span {
+.trainer-panel > summary span,
+.settlement-panel > summary span {
   display: grid;
   gap: 3px;
 }
@@ -603,9 +613,65 @@ summary em {
 }
 
 .settings-content,
-.trainer-content {
+.trainer-content,
+.settlement-content {
   padding: 0 20px 20px;
   border-top: 1px solid var(--line-soft);
+}
+
+.settlement-content {
+  display: grid;
+  gap: 18px;
+}
+
+.settlement-upload-card {
+  display: grid;
+  grid-template-columns: minmax(280px, 440px) minmax(220px, 1fr);
+  align-items: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.compact-drop {
+  min-height: 128px;
+}
+
+.settlement-settings {
+  padding: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdfc 100%);
+}
+
+.settlement-settings .field-grid {
+  margin-top: 0;
+}
+
+.settlement-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settlement-summary {
+  padding: 15px 18px;
+  border: 1px solid #d8ede8;
+  border-radius: var(--radius-md);
+  background: var(--green-soft);
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.settlement-summary strong {
+  color: var(--green-strong);
+}
+
+.settlement-preview {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: #fff;
 }
 
 .quick-settings,
@@ -1172,6 +1238,7 @@ th.num {
   .workflow-stage,
   .metrics,
   .date-filter,
+  .settlement-upload-card,
   .review-grid {
     grid-template-columns: 1fr;
   }

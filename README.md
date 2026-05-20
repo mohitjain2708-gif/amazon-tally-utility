@@ -1,6 +1,6 @@
 # Amazon Sales to Tally XML Utility
 
-This is a browser utility for converting Amazon GST MTR B2B/B2C CSV reports into TallyPrime Sales Voucher XML. It can also read Amazon Bulk Invoice ZIP files to enrich vouchers with complete Bill To and Ship To addresses from the invoice PDFs.
+This is a browser utility for converting Amazon GST MTR B2B/B2C CSV reports into TallyPrime Sales Voucher XML. It can also read Amazon Bulk Invoice ZIP files to enrich vouchers with complete Bill To and Ship To addresses from the invoice PDFs. A settlement module can generate Tally Journal XML from the enriched Amazon settlement Excel workbook.
 
 ## How to Use
 
@@ -12,6 +12,18 @@ This is a browser utility for converting Amazon GST MTR B2B/B2C CSV reports into
 6. Click `Validate & Preview`.
 7. Download `amazon-sales-tally.xml`.
 8. In TallyPrime, import it as transaction XML under `Import > Transactions`.
+
+## Settlement Journal XML
+
+Use the `Settlement XML` section for Amazon payout accounting after sales and credit note vouchers are imported.
+
+1. Upload the enriched Amazon settlement Excel workbook.
+2. Confirm the Journal voucher type and settlement ledgers.
+3. Click `Validate Settlement`.
+4. Review payout, sales clearing, fees, TCS, TDS, and order count.
+5. Download `amazon-settlement-tally.xml`.
+
+The enriched workbook should include the user-added `transaction` column (`B2B` / `B2C`) and `GST` column. These fields are used to split clearing entries between `B2B Amazon Sales` and `B2C Amazon Sales`.
 
 ## Public Hosting on Vercel
 
@@ -47,6 +59,7 @@ Important for public trials:
 - Sales ledger is selected by the user and applied to every inventory allocation.
 - B2B buyer name and GSTIN are still written into buyer/consignee/GST fields where available.
 - When matching invoice PDFs are uploaded, PDF Bill To and Ship To address blocks override the incomplete CSV address fields in the generated XML.
+- Settlement XML is generated as Tally `Journal` vouchers. It clears Amazon sales ledgers and records payout, Amazon fee ledgers, TCS receivable, TDS receivable, reimbursements, and other charges.
 
 ## Tally Notes
 

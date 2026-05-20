@@ -59,6 +59,12 @@
             </span>
             Learned Data
           </a>
+          <a href="#settlementPanel">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M5 7.5h14"></path><path d="M7 4.5h10v15H7z"></path><path d="M9.5 11h5"></path><path d="M9.5 14.5h3.8"></path></svg>
+            </span>
+            Settlement XML
+          </a>
           <a href="#helpPanel">
             <span class="nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M12 19h.1"></path><path d="M9.5 9.2a2.7 2.7 0 1 1 4.2 2.2c-1.1.7-1.7 1.3-1.7 2.6"></path><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"></path></svg>
@@ -305,6 +311,113 @@
               <div class="learning-summary" data-learning-summary>No historical mapping learned yet.</div>
             </div>
           </details>
+
+          <details class="settlement-panel" id="settlementPanel">
+            <summary>
+              <span>
+                <strong>Amazon settlement accounting</strong>
+                <em>Generate Journal XML for Amazon payout, fees, TCS, TDS, reimbursements, and ledger clearing.</em>
+              </span>
+            </summary>
+            <div class="settlement-content">
+              <div class="settlement-upload-card">
+                <label class="drop-zone file-drop compact-drop" data-settlement-drop-zone>
+                  <input id="settlementInput" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" multiple>
+                  <span class="file-icon csv-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M7 3.5h7l3 3V20H7z"></path><path d="M14 3.5v3h3"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path></svg>
+                  </span>
+                  <strong data-settlement-file-name>Choose settlement Excel files</strong>
+                  <small>Use the enriched Amazon settlement workbook with B2B/B2C and GST columns</small>
+                </label>
+                <div class="upload-state" data-settlement-status>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.8 12.5 2.1 2.1 4.4-4.6"></path><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"></path></svg>
+                  Waiting for settlement report
+                </div>
+              </div>
+
+              <div class="settlement-settings">
+                <div class="field-grid">
+                  <label>
+                    <span>Settlement voucher type</span>
+                    <input name="settlementVoucherType" value="Journal" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Voucher no. start</span>
+                    <input name="settlementVoucherNumberStart" placeholder="Optional, e.g. 107" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Amazon payout ledger</span>
+                    <input name="settlementPartyLedgerName" value="Mangal Maitri Multitrade LLP - JPR" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>BLR fee ledger</span>
+                    <input name="feeLedgerBlrName" value="Amazon Seller Services Private Limited - BLR" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>DEL fee ledger</span>
+                    <input name="feeLedgerDelName" value="Amazon Seller Services Private Limited - DEL" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>TCS ledger</span>
+                    <input name="tcsLedgerName" value="TCS Receivable" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>TDS ledger</span>
+                    <input name="tdsLedgerName" value="TDS Receivable" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Reimbursement ledger</span>
+                    <input name="reimbursementLedgerName" value="Amazon Reimbursements" autocomplete="off">
+                  </label>
+                  <label>
+                    <span>Other charges ledger</span>
+                    <input name="otherChargesLedgerName" value="Amazon Other Charges" autocomplete="off">
+                  </label>
+                </div>
+              </div>
+
+              <div class="settlement-actions">
+                <button id="processSettlementButton" class="primary" type="button" disabled>
+                  <span>Validate Settlement</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                </button>
+                <button id="downloadSettlementXml" type="button" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10"></path><path d="m8 10 4 4 4-4"></path><path d="M5 20h14"></path></svg>
+                  Download Settlement XML
+                </button>
+                <button id="downloadSettlementReport" type="button" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l3 3V20H7z"></path><path d="M14 3.5v3h3"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path></svg>
+                  Settlement Report
+                </button>
+              </div>
+
+              <div class="settlement-summary" data-settlement-summary>
+                Upload a settlement report to see payout, sales ledger clearing, fees, TCS, and TDS.
+              </div>
+
+              <div class="table-wrap settlement-preview">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Settlement ID</th>
+                      <th>Date</th>
+                      <th class="num">Payout</th>
+                      <th class="num">Sales clearing</th>
+                      <th class="num">B2B</th>
+                      <th class="num">B2C</th>
+                      <th class="num">Fees</th>
+                      <th class="num">TCS</th>
+                      <th class="num">TDS</th>
+                      <th class="num">Orders</th>
+                    </tr>
+                  </thead>
+                  <tbody data-settlement-preview-body>
+                    <tr><td colspan="10" class="empty">Settlement preview will appear here after validation.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </details>
         </form>
 
         <section class="summary-panel">
@@ -480,6 +593,7 @@
     <script src="trainer.js"></script>
     <script src="pdf-addresses.js"></script>
     <script src="learned-mapping.js"></script>
+    <script src="settlement-converter.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
