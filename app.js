@@ -33,6 +33,9 @@ const els = {
   settlementReportButton: document.querySelector("#downloadSettlementReport"),
   settlementSummary: document.querySelector("[data-settlement-summary]"),
   settlementPreviewBody: document.querySelector("[data-settlement-preview-body]"),
+  utilityTabs: Array.from(document.querySelectorAll("[data-utility-tab]")),
+  utilityTitle: document.querySelector("[data-utility-title]"),
+  utilitySubtitle: document.querySelector("[data-utility-subtitle]"),
   historyCsvInput: document.querySelector("#historyCsvInput"),
   daybookInput: document.querySelector("#daybookInput"),
   analyzeHistoryButton: document.querySelector("#analyzeHistoryButton"),
@@ -53,6 +56,32 @@ let currentBaseConfig = null;
 let fullDateRange = { from: "", to: "" };
 let syncingDateInputs = false;
 let currentLearnedMapping = null;
+
+const UTILITY_COPY = {
+  sales: {
+    title: "Amazon Sales to Tally XML",
+    subtitle: "Convert Amazon GST MTR reports and invoice PDFs into TallyPrime Sales Voucher XML.",
+  },
+  settlement: {
+    title: "Amazon Settlement to Tally XML",
+    subtitle: "Create Tally Journal XML for Amazon payout, fees, TCS, TDS, reimbursements, and sales ledger clearing.",
+  },
+};
+
+function switchUtility(utility) {
+  const activeUtility = utility === "settlement" ? "settlement" : "sales";
+  document.body.dataset.activeUtility = activeUtility;
+  els.utilityTabs.forEach((tab) => {
+    const isActive = tab.dataset.utilityTab === activeUtility;
+    tab.classList.toggle("active", isActive);
+    tab.setAttribute("aria-pressed", String(isActive));
+  });
+  if (els.utilityTitle) els.utilityTitle.textContent = UTILITY_COPY[activeUtility].title;
+  if (els.utilitySubtitle) els.utilitySubtitle.textContent = UTILITY_COPY[activeUtility].subtitle;
+  document.querySelectorAll(".rail-nav a").forEach((link) => link.classList.remove("active"));
+  const activeNav = document.querySelector(activeUtility === "settlement" ? 'a[href="#settlementPanel"]' : 'a[href="#dashboard"]');
+  if (activeNav) activeNav.classList.add("active");
+}
 
 function setStatus(message, tone = "neutral") {
   els.status.textContent = message;
@@ -721,6 +750,15 @@ els.pdfZipInput.addEventListener("change", (event) => selectPdfFiles(event.targe
 if (els.settlementInput) els.settlementInput.addEventListener("change", (event) => selectSettlementFiles(event.target.files));
 els.processButton.addEventListener("click", processFile);
 if (els.processSettlementButton) els.processSettlementButton.addEventListener("click", processSettlementFile);
+els.utilityTabs.forEach((tab) => {
+  tab.addEventListener("click", () => switchUtility(tab.dataset.utilityTab));
+});
+document.querySelectorAll('a[href="#settlementPanel"]').forEach((link) => {
+  link.addEventListener("click", () => switchUtility("settlement"));
+});
+document.querySelectorAll('a[href="#dashboard"], a[href="#uploadCard"], a[href="#previewCard"], a[href="#validationCard"], a[href="#settingsPanel"], a[href="#trainerPanel"]').forEach((link) => {
+  link.addEventListener("click", () => switchUtility("sales"));
+});
 if (els.dateFrom) els.dateFrom.addEventListener("change", applyDateFilter);
 if (els.dateTo) els.dateTo.addEventListener("change", applyDateFilter);
 if (els.dateReset) {

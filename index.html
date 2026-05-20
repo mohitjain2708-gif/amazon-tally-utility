@@ -6,7 +6,7 @@
     <title>Amazon Sales to Tally XML</title>
     <link rel="stylesheet" href="styles.css">
   </head>
-  <body>
+  <body data-active-utility="sales">
     <main class="app-shell">
       <aside class="side-rail" aria-label="Product navigation">
         <div class="brand-lockup">
@@ -85,8 +85,8 @@
       <section class="main-area" id="dashboard">
         <header class="topbar">
           <div>
-            <h1>Amazon Sales to Tally XML</h1>
-            <p>Convert Amazon GST MTR reports and invoice PDFs into TallyPrime Sales Voucher XML.</p>
+            <h1 data-utility-title>Amazon Sales to Tally XML</h1>
+            <p data-utility-subtitle>Convert Amazon GST MTR reports and invoice PDFs into TallyPrime Sales Voucher XML.</p>
           </div>
           <div class="top-actions" id="helpPanel">
             <button type="button" class="ghost-button">
@@ -103,8 +103,29 @@
           </div>
         </header>
 
+        <section class="utility-switch" aria-label="Choose utility">
+          <button type="button" class="utility-tab active" data-utility-tab="sales" aria-pressed="true">
+            <span class="utility-tab-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M7 3.5h7l3 3V20H7z"></path><path d="M14 3.5v3h3"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path></svg>
+            </span>
+            <span>
+              <strong>Sales & Credit Note XML</strong>
+              <small>Amazon GST MTR + invoice PDFs</small>
+            </span>
+          </button>
+          <button type="button" class="utility-tab" data-utility-tab="settlement" aria-pressed="false">
+            <span class="utility-tab-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M5 7.5h14"></path><path d="M7 4.5h10v15H7z"></path><path d="M9.5 11h5"></path><path d="M9.5 14.5h3.8"></path></svg>
+            </span>
+            <span>
+              <strong>Settlement Journal XML</strong>
+              <small>Amazon payout, fees, TCS, TDS</small>
+            </span>
+          </button>
+        </section>
+
         <form class="config-form" id="configForm">
-          <section class="workflow-stage" aria-label="Upload and generate workflow">
+          <section class="workflow-stage" aria-label="Upload and generate workflow" data-utility-view="sales">
             <article class="workflow-card" id="uploadCard">
               <div class="workflow-heading">
                 <span class="step-badge">1</span>
@@ -171,7 +192,7 @@
             </article>
           </section>
 
-          <section class="settings-panel" id="settingsPanel">
+          <section class="settings-panel" id="settingsPanel" data-utility-view="sales">
             <details>
               <summary>
                 <span>
@@ -287,7 +308,7 @@
             </details>
           </section>
 
-          <details class="trainer-panel" id="trainerPanel">
+          <details class="trainer-panel" id="trainerPanel" data-utility-view="sales">
             <summary>
               <span>
                 <strong>Learn mappings from historical data</strong>
@@ -312,13 +333,16 @@
             </div>
           </details>
 
-          <details class="settlement-panel" id="settlementPanel">
-            <summary>
-              <span>
-                <strong>Amazon settlement accounting</strong>
-                <em>Generate Journal XML for Amazon payout, fees, TCS, TDS, reimbursements, and ledger clearing.</em>
-              </span>
-            </summary>
+          <section class="settlement-panel" id="settlementPanel" data-utility-view="settlement">
+            <div class="section-heading settlement-heading">
+              <div class="heading-icon success" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M5 7.5h14"></path><path d="M7 4.5h10v15H7z"></path><path d="M9.5 11h5"></path><path d="M9.5 14.5h3.8"></path></svg>
+              </div>
+              <div>
+                <h2>Amazon Settlement Accounting</h2>
+                <p>Generate Journal XML for Amazon payout, fees, TCS, TDS, reimbursements, and ledger clearing.</p>
+              </div>
+            </div>
             <div class="settlement-content">
               <div class="settlement-upload-card">
                 <label class="drop-zone file-drop compact-drop" data-settlement-drop-zone>
@@ -417,10 +441,10 @@
                 </table>
               </div>
             </div>
-          </details>
+          </section>
         </form>
 
-        <section class="summary-panel">
+        <section class="summary-panel" data-utility-view="sales">
           <div class="section-heading">
             <div class="heading-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M7 3.5h7l3 3V20H7z"></path><path d="M14 3.5v3h3"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path></svg>
@@ -485,7 +509,7 @@
           </div>
         </section>
 
-        <section class="review-grid">
+        <section class="review-grid" data-utility-view="sales">
           <article class="preview-panel" id="previewCard">
             <div class="section-heading compact">
               <div class="heading-icon purple" aria-hidden="true">
@@ -567,7 +591,7 @@
           </aside>
         </section>
 
-        <section class="action-bar" aria-label="Primary actions">
+        <section class="action-bar" aria-label="Primary actions" data-utility-view="sales">
           <button type="button" class="secondary" onclick="window.location.reload()">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2-5.1"></path><path d="M4.5 4.5v5h5"></path></svg>
             Start Over

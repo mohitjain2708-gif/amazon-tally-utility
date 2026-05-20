@@ -325,8 +325,79 @@ button:disabled {
   display: contents;
 }
 
-.workflow-stage {
+.utility-switch {
   order: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 4px 0 22px;
+}
+
+.utility-tab {
+  justify-content: flex-start;
+  min-height: 82px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.86);
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+}
+
+.utility-tab.active {
+  border-color: #a8ded1;
+  background: linear-gradient(180deg, #f2fbf8 0%, #ffffff 100%);
+  color: var(--green-strong);
+  box-shadow: 0 18px 48px rgba(7, 138, 114, 0.12);
+}
+
+.utility-tab-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+}
+
+.utility-tab.active .utility-tab-icon {
+  background: var(--green);
+  color: #fff;
+}
+
+.utility-tab span:last-child {
+  display: grid;
+  gap: 4px;
+}
+
+.utility-tab strong,
+.utility-tab small {
+  display: block;
+}
+
+.utility-tab strong {
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.utility-tab small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.28;
+}
+
+.utility-tab.active strong {
+  color: var(--green-strong);
+}
+
+body[data-active-utility="sales"] [data-utility-view="settlement"],
+body[data-active-utility="settlement"] [data-utility-view="sales"] {
+  display: none !important;
+}
+
+.workflow-stage {
+  order: 2;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr) 36px minmax(0, 1fr);
@@ -565,7 +636,7 @@ button:disabled {
 }
 
 .settlement-panel {
-  order: 7;
+  order: 2;
 }
 
 .settings-panel summary,
@@ -622,6 +693,12 @@ summary em {
 .settlement-content {
   display: grid;
   gap: 18px;
+}
+
+.settlement-heading {
+  margin-bottom: 0;
+  padding: 20px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .settlement-upload-card {
@@ -1236,6 +1313,7 @@ th.num {
   }
 
   .workflow-stage,
+  .utility-switch,
   .metrics,
   .date-filter,
   .settlement-upload-card,
