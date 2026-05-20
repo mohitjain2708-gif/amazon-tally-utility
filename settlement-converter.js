@@ -138,6 +138,24 @@
     return `${Number(value.slice(6, 8))} ${months[Number(value.slice(4, 6)) - 1]} ${value.slice(0, 4)}`;
   }
 
+  function normalizeFilterDate(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (/^\d{8}$/.test(raw)) return raw;
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return `${iso[1]}${iso[2]}${iso[3]}`;
+    return parseAmazonDate(raw);
+  }
+
+  function isDateWithinFilter(tallyDate, config) {
+    if (!tallyDate) return true;
+    const from = normalizeFilterDate(config.dateFrom);
+    const to = normalizeFilterDate(config.dateTo);
+    if (from && tallyDate < from) return false;
+    if (to && tallyDate > to) return false;
+    return true;
+  }
+
   function isHeaderRow(record) {
     return Boolean(get(record, "settlement-id")) && Boolean(get(record, "total-amount")) && !get(record, "transaction-type") && !get(record, "amount-type");
   }
@@ -299,11 +317,11 @@
       settlementMap.get(id).rows.push(record);
     });
 
-    const settlements = Array.from(settlementMap.values())
+    const allSettlements = Array.from(settlementMap.values())
       .filter((settlement) => settlement.rows.length || settlement.totalAmount)
       .map((settlement) => buildSettlement(records, settlement, config, warnings));
 
-    settlements.forEach((settlement) => {
+    allSettlements.forEach((settlement) => {
       if (!settlement.totalAmount) {
         errors.push({
           settlementId: settlement.id,
@@ -313,7 +331,12 @@
       }
     });
 
-    return { config, records, settlements, errors, warnings };
+    const settlements = allSettlements.filter((settlement) => isDateWithinFilter(settlement.date, config));
+    const includedIds = new Set(settlements.map((settlement) => settlement.id));
+    const filteredWarnings = warnings.filter((warning) => !warning.settlementId || includedIds.has(warning.settlementId));
+    const filteredErrors = errors.filter((error) => !error.settlementId || includedIds.has(error.settlementId));
+
+    return { config, records, settlements, errors: filteredErrors, warnings: filteredWarnings };
   }
 
   function billAllocationsXml(bills, billType, indent) {
@@ -480,13 +503,24 @@
   function convertRecords(records, configInput) {
     const analysis = analyze(records, configInput);
     const xml = analysis.errors.length ? "" : buildXml(analysis.settlements, analysis.config);
+    const sortedDates = analysis.settlements.map((settlement) => settlement.date).filter(Boolean).sort();
+    const minSettlementDate = sortedDates[0] || "";
+    const maxSettlementDate = sortedDates[sortedDates.length - 1] || "";
+    const settlementDateRange = minSettlementDate && maxSettlementDate
+      ? `${displayTallyDate(minSettlementDate)} - ${displayTallyDate(maxSettlementDate)}`
+      : "";
     return {
       ...analysis,
+      errors: analysis.errors,
+      warnings: analysis.warnings,
       summary: {
         settlementCount: analysis.settlements.length,
         totalPayout: analysis.settlements.reduce((sum, settlement) => round2(sum + settlement.totalAmount), 0),
         warningCount: analysis.warnings.length,
         errorCount: analysis.errors.length,
+        minSettlementDate,
+        maxSettlementDate,
+        settlementDateRange,
       },
       xml,
       preview: previewRows(analysis.settlements, analysis.config),

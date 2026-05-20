@@ -34,6 +34,11 @@ const els = {
   settlementSummary: document.querySelector("[data-settlement-summary]"),
   settlementReadyLabel: document.querySelector("[data-settlement-ready-label]"),
   settlementPreviewBody: document.querySelector("[data-settlement-preview-body]"),
+  settlementDateFilter: document.querySelector("[data-settlement-date-filter]"),
+  settlementDateFrom: document.querySelector("[data-settlement-date-from]"),
+  settlementDateTo: document.querySelector("[data-settlement-date-to]"),
+  settlementDateReset: document.querySelector("[data-settlement-date-reset]"),
+  settlementDateFilterHelp: document.querySelector("[data-settlement-date-filter-help]"),
   utilityTabs: Array.from(document.querySelectorAll("[data-utility-tab]")),
   utilityTitle: document.querySelector("[data-utility-title]"),
   utilitySubtitle: document.querySelector("[data-utility-subtitle]"),
@@ -54,8 +59,12 @@ let currentResult = null;
 let currentSettlementResult = null;
 let currentCsvText = "";
 let currentBaseConfig = null;
+let currentSettlementRecords = [];
+let currentSettlementBaseConfig = null;
 let fullDateRange = { from: "", to: "" };
+let fullSettlementDateRange = { from: "", to: "" };
 let syncingDateInputs = false;
+let syncingSettlementDateInputs = false;
 let currentLearnedMapping = null;
 
 const UTILITY_COPY = {
@@ -208,6 +217,9 @@ function selectPdfFiles(files) {
 function selectSettlementFiles(files) {
   currentSettlementFiles = Array.from(files || []).filter((file) => /\.(xlsx|xls)$/i.test(file.name));
   currentSettlementResult = null;
+  currentSettlementRecords = [];
+  currentSettlementBaseConfig = null;
+  fullSettlementDateRange = { from: "", to: "" };
   if (els.settlementFileName) {
     els.settlementFileName.textContent = selectedFilesLabel(currentSettlementFiles, "Choose settlement Excel files");
   }
@@ -228,6 +240,7 @@ function selectSettlementFiles(files) {
   if (els.settlementPreviewBody) {
     els.settlementPreviewBody.innerHTML = '<tr><td colspan="10" class="empty">Upload a settlement workbook and validate it to see voucher details here.</td></tr>';
   }
+  if (els.settlementDateFilter) els.settlementDateFilter.hidden = true;
   if (els.settlementReadyLabel) els.settlementReadyLabel.textContent = currentSettlementFiles.length ? "(Ready to validate)" : "(Waiting for upload)";
 }
 
@@ -566,6 +579,29 @@ function renderSettlementEmptySummary(primary = "Upload file", caption = "Waitin
   `;
 }
 
+function setupSettlementDateFilter(summary) {
+  const minDate = tallyDateToInputDate(summary.minSettlementDate);
+  const maxDate = tallyDateToInputDate(summary.maxSettlementDate);
+  if (!els.settlementDateFilter || !minDate || !maxDate) {
+    if (els.settlementDateFilter) els.settlementDateFilter.hidden = true;
+    return;
+  }
+
+  fullSettlementDateRange = { from: minDate, to: maxDate };
+  syncingSettlementDateInputs = true;
+  els.settlementDateFilter.hidden = false;
+  [els.settlementDateFrom, els.settlementDateTo].forEach((input) => {
+    input.min = minDate;
+    input.max = maxDate;
+  });
+  els.settlementDateFrom.value = minDate;
+  els.settlementDateTo.value = maxDate;
+  if (els.settlementDateFilterHelp) {
+    els.settlementDateFilterHelp.textContent = `Full uploaded period: ${summary.settlementDateRange}. Choose a smaller range if needed.`;
+  }
+  syncingSettlementDateInputs = false;
+}
+
 function renderSettlementResult(result) {
   currentSettlementResult = result;
   const warnings = result.warnings || [];
@@ -580,7 +616,7 @@ function renderSettlementResult(result) {
       0
     );
     els.settlementSummary.innerHTML = `
-      <div class="metric range-metric"><span>Settlement vouchers</span><strong>${result.summary.settlementCount}</strong><small>Journal voucher XML</small></div>
+      <div class="metric range-metric"><span>Settlement date range</span><strong>${result.summary.settlementDateRange || "Not available"}</strong><small>${result.summary.settlementCount} Journal voucher(s)</small></div>
       <div class="metric"><span>Total payout</span><strong>${AmazonSettlementConverter.formatAmount(result.summary.totalPayout)}</strong><small>Amazon transfer total</small></div>
       <div class="metric sales-metric"><span>Sales clearing</span><strong>${AmazonSettlementConverter.formatAmount(salesTotal)}</strong><small>B2B + B2C ledgers</small></div>
       <div class="metric refund-metric"><span>Fees & charges</span><strong>${AmazonSettlementConverter.formatAmount(feeTotal)}</strong><small>Amazon deductions</small></div>
@@ -623,6 +659,33 @@ function renderSettlementResult(result) {
       : `Settlement XML ready: ${result.summary.settlementCount} Journal voucher(s), payout Rs. ${AmazonSettlementConverter.formatAmount(result.summary.totalPayout)}.`,
     errors.length ? "bad" : "good"
   );
+}
+
+function applySettlementDateFilter() {
+  if (syncingSettlementDateInputs || !currentSettlementRecords.length || !currentSettlementBaseConfig) return;
+  const from = els.settlementDateFrom?.value || "";
+  const to = els.settlementDateTo?.value || "";
+
+  if (from && to && from > to) {
+    setStatus("Selected settlement From date cannot be after To date.", "bad");
+    if (els.settlementXmlButton) els.settlementXmlButton.disabled = true;
+    if (els.settlementReportButton) els.settlementReportButton.disabled = true;
+    return;
+  }
+
+  const config = {
+    ...currentSettlementBaseConfig,
+    dateFrom: inputDateToTallyDate(from),
+    dateTo: inputDateToTallyDate(to),
+  };
+  const filteredResult = AmazonSettlementConverter.convertRecords(currentSettlementRecords, config);
+  renderSettlementResult(filteredResult);
+  if (els.settlementDateFilterHelp) {
+    const usingFullRange = from === fullSettlementDateRange.from && to === fullSettlementDateRange.to;
+    els.settlementDateFilterHelp.textContent = usingFullRange
+      ? `Full uploaded period selected: ${filteredResult.summary.settlementDateRange || "not available"}.`
+      : `Settlement XML will include only Journal vouchers dated ${filteredResult.summary.settlementDateRange || "within the selected dates"}.`;
+  }
 }
 
 function setupDateFilter(summary) {
@@ -754,7 +817,10 @@ async function processSettlementFile() {
       readSettlementFilesRecords(currentSettlementFiles),
       currentSalesFiles.length ? buildOrderClassificationsFromSalesFiles(currentSalesFiles) : Promise.resolve({}),
     ]);
-    const result = AmazonSettlementConverter.convertRecords(records, readSettlementConfig(orderClassifications));
+    currentSettlementRecords = records;
+    currentSettlementBaseConfig = readSettlementConfig(orderClassifications);
+    const result = AmazonSettlementConverter.convertRecords(records, currentSettlementBaseConfig);
+    setupSettlementDateFilter(result.summary);
     renderSettlementResult(result);
   } catch (error) {
     setStatus(`Could not process settlement file: ${error.message}`, "bad");
@@ -782,6 +848,8 @@ document.querySelectorAll('a[href="#dashboard"], a[href="#uploadCard"], a[href="
 });
 if (els.dateFrom) els.dateFrom.addEventListener("change", applyDateFilter);
 if (els.dateTo) els.dateTo.addEventListener("change", applyDateFilter);
+if (els.settlementDateFrom) els.settlementDateFrom.addEventListener("change", applySettlementDateFilter);
+if (els.settlementDateTo) els.settlementDateTo.addEventListener("change", applySettlementDateFilter);
 if (els.dateReset) {
   els.dateReset.addEventListener("click", () => {
     if (!fullDateRange.from || !fullDateRange.to) return;
@@ -790,6 +858,16 @@ if (els.dateReset) {
     els.dateTo.value = fullDateRange.to;
     syncingDateInputs = false;
     applyDateFilter();
+  });
+}
+if (els.settlementDateReset) {
+  els.settlementDateReset.addEventListener("click", () => {
+    if (!fullSettlementDateRange.from || !fullSettlementDateRange.to) return;
+    syncingSettlementDateInputs = true;
+    els.settlementDateFrom.value = fullSettlementDateRange.from;
+    els.settlementDateTo.value = fullSettlementDateRange.to;
+    syncingSettlementDateInputs = false;
+    applySettlementDateFilter();
   });
 }
 

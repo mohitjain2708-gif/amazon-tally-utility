@@ -419,6 +419,22 @@
                 <div class="metric refund-metric"><span>Fees & charges</span><strong>0</strong><small>Amazon deductions</small></div>
                 <div class="metric pdf-metric"><span>Issues found</span><strong>0</strong><small>Warnings and errors</small></div>
               </div>
+
+              <section class="date-filter" data-settlement-date-filter hidden>
+                <div>
+                  <strong>Generate XML for selected settlement dates</strong>
+                  <span data-settlement-date-filter-help>Choose any date range within the uploaded settlement period.</span>
+                </div>
+                <label>
+                  <span>From</span>
+                  <input type="date" data-settlement-date-from>
+                </label>
+                <label>
+                  <span>To</span>
+                  <input type="date" data-settlement-date-to>
+                </label>
+                <button type="button" data-settlement-date-reset>Use full range</button>
+              </section>
             </section>
 
             <section class="preview-panel settlement-preview-panel">
