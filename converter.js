@@ -231,8 +231,58 @@
     return value && counts.get(value) > 1;
   }
 
+  const INDIAN_STATES = [
+    "ANDAMAN AND NICOBAR ISLANDS",
+    "ANDHRA PRADESH",
+    "ARUNACHAL PRADESH",
+    "ASSAM",
+    "BIHAR",
+    "CHANDIGARH",
+    "CHHATTISGARH",
+    "DADRA AND NAGAR HAVELI AND DAMAN AND DIU",
+    "DAMAN AND DIU",
+    "DELHI",
+    "GOA",
+    "GUJARAT",
+    "HARYANA",
+    "HIMACHAL PRADESH",
+    "JAMMU AND KASHMIR",
+    "JHARKHAND",
+    "KARNATAKA",
+    "KERALA",
+    "LADAKH",
+    "LAKSHADWEEP",
+    "MADHYA PRADESH",
+    "MAHARASHTRA",
+    "MANIPUR",
+    "MEGHALAYA",
+    "MIZORAM",
+    "NAGALAND",
+    "ODISHA",
+    "ORISSA",
+    "PUDUCHERRY",
+    "PUNJAB",
+    "RAJASTHAN",
+    "SIKKIM",
+    "TAMIL NADU",
+    "TELANGANA",
+    "TRIPURA",
+    "UTTAR PRADESH",
+    "UTTARAKHAND",
+    "WEST BENGAL",
+  ].sort((a, b) => b.length - a.length);
+
   function normalizeState(value) {
-    return String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
+    const text = String(value || "")
+      .trim()
+      .replace(/\s+(ORDER|INVOICE|CREDIT\s+NOTE|ORIGINAL|DESCRIPTION|SL\.?\s*TAX|TOTAL)\b.*$/i, "")
+      .replace(/\s+PLACE\s+OF\s+(SUPPLY|DELIVERY)\b.*$/i, "")
+      .replace(/[^A-Za-z &]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toUpperCase();
+    const matched = INDIAN_STATES.find((state) => text === state || text.startsWith(`${state} `));
+    return matched || text;
   }
 
   function titleCaseState(value) {

@@ -64,6 +64,58 @@
     return match ? match[1] : "";
   }
 
+  const INDIAN_STATES = [
+    "ANDAMAN AND NICOBAR ISLANDS",
+    "ANDHRA PRADESH",
+    "ARUNACHAL PRADESH",
+    "ASSAM",
+    "BIHAR",
+    "CHANDIGARH",
+    "CHHATTISGARH",
+    "DADRA AND NAGAR HAVELI AND DAMAN AND DIU",
+    "DAMAN AND DIU",
+    "DELHI",
+    "GOA",
+    "GUJARAT",
+    "HARYANA",
+    "HIMACHAL PRADESH",
+    "JAMMU AND KASHMIR",
+    "JHARKHAND",
+    "KARNATAKA",
+    "KERALA",
+    "LADAKH",
+    "LAKSHADWEEP",
+    "MADHYA PRADESH",
+    "MAHARASHTRA",
+    "MANIPUR",
+    "MEGHALAYA",
+    "MIZORAM",
+    "NAGALAND",
+    "ODISHA",
+    "ORISSA",
+    "PUDUCHERRY",
+    "PUNJAB",
+    "RAJASTHAN",
+    "SIKKIM",
+    "TAMIL NADU",
+    "TELANGANA",
+    "TRIPURA",
+    "UTTAR PRADESH",
+    "UTTARAKHAND",
+    "WEST BENGAL",
+  ].sort((a, b) => b.length - a.length);
+
+  function cleanPlaceState(value) {
+    let text = compact(value)
+      .replace(/\s+(ORDER|INVOICE|CREDIT\s+NOTE|ORIGINAL|DESCRIPTION|SL\.?\s*TAX|TOTAL)\b.*$/i, "")
+      .replace(/\s+PLACE\s+OF\s+(SUPPLY|DELIVERY)\b.*$/i, "")
+      .trim()
+      .toUpperCase();
+    text = text.replace(/[^A-Z &]/g, " ").replace(/\s+/g, " ").trim();
+    const matched = INDIAN_STATES.find((state) => text === state || text.startsWith(`${state} `));
+    return matched || text;
+  }
+
   function looksLikeSellerOrFooterLine(line) {
     return [
       /^GST\s+Registration\s+No\s*:\s*[0-9A-Z]{15}\s*$/i,
@@ -150,7 +202,7 @@
   }
 
   function stripTrailingPlaceLabel(value) {
-    return compact(value).replace(/\s+Place\s+of\s+(delivery|supply).*$/i, "").trim();
+    return cleanPlaceState(value);
   }
 
   function parseInvoiceText(text, fileName) {
