@@ -10,8 +10,9 @@ This is a browser utility for converting Amazon GST MTR B2B/B2C CSV reports into
 4. Upload one or more Amazon Bulk Invoice ZIP files if full addresses are required.
 5. Confirm Tally ledger names and SKU-to-stock-item mappings.
 6. Click `Validate & Preview`.
-7. Download `amazon-sales-tally.xml`.
-8. In TallyPrime, import it as transaction XML under `Import > Transactions`.
+7. Download the accounting preview report if you want to review the expected debit/credit postings before import.
+8. Download `amazon-sales-tally.xml`.
+9. In TallyPrime, import it as transaction XML under `Import > Transactions`.
 
 ## Settlement Journal XML
 
@@ -23,7 +24,8 @@ Use the `Settlement XML` section for Amazon payout accounting after sales and cr
 4. Review payout, sales clearing, fees, TCS, TDS, and order count.
 5. Optionally choose a smaller settlement date range.
 6. Download the audit report if review items appear.
-7. Download `amazon-settlement-tally.xml`.
+7. Download the accounting preview report to review voucher-wise debit/credit postings.
+8. Download `amazon-settlement-tally.xml`.
 
 The enriched workbook should include the user-added `transaction` column (`B2B` / `B2C`) and `GST` column. These fields are used to split clearing entries between `B2B Amazon Sales` and `B2C Amazon Sales`.
 
@@ -63,6 +65,7 @@ Important for public trials:
 - When matching invoice PDFs are uploaded, PDF Bill To and Ship To address blocks override the incomplete CSV address fields in the generated XML.
 - Settlement XML is generated as Tally `Journal` vouchers. It clears Amazon sales ledgers and records payout, Amazon fee ledgers, TCS receivable, TDS receivable, reimbursements, and other charges. Reimbursements are netted into the BLR Amazon seller ledger by default to match the learned Tally voucher pattern.
 - Settlement review items are exported as an audit-style CSV with severity, issue code, settlement ID, voucher date, affected orders, affected amount, assumption applied, accounting impact, and fix steps.
+- Accounting preview CSVs are available for both sales/credit note XML and settlement XML. These reports show the voucher-wise ledgers, debit amounts, credit amounts, bill/order references, and basis so users can review the expected Tally posting before importing XML.
 
 ## Tally Notes
 

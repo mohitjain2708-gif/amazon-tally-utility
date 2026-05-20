@@ -29,8 +29,10 @@ const els = {
   issuesBody: document.querySelector("[data-issues-body]"),
   xmlButton: document.querySelector("#downloadXml"),
   reportButton: document.querySelector("#downloadReport"),
+  accountingReportButton: document.querySelector("#downloadAccountingReport"),
   settlementXmlButton: document.querySelector("#downloadSettlementXml"),
   settlementReportButton: document.querySelector("#downloadSettlementReport"),
+  settlementAccountingReportButton: document.querySelector("#downloadSettlementAccountingReport"),
   settlementSummary: document.querySelector("[data-settlement-summary]"),
   settlementReadyLabel: document.querySelector("[data-settlement-ready-label]"),
   settlementPreviewBody: document.querySelector("[data-settlement-preview-body]"),
@@ -187,6 +189,7 @@ function selectSalesFiles(files) {
   els.processButton.disabled = !currentSalesFiles.length;
   els.xmlButton.disabled = true;
   els.reportButton.disabled = true;
+  if (els.accountingReportButton) els.accountingReportButton.disabled = true;
   renderEmptyState();
   if (els.csvUploadStatus) {
     els.csvUploadStatus.innerHTML = currentSalesFiles.length
@@ -213,6 +216,7 @@ function selectPdfFiles(files) {
   currentResult = null;
   els.xmlButton.disabled = true;
   els.reportButton.disabled = true;
+  if (els.accountingReportButton) els.accountingReportButton.disabled = true;
 }
 
 function selectSettlementFiles(files) {
@@ -230,6 +234,7 @@ function selectSettlementFiles(files) {
   if (els.processSettlementButton) els.processSettlementButton.disabled = !currentSettlementFiles.length;
   if (els.settlementXmlButton) els.settlementXmlButton.disabled = true;
   if (els.settlementReportButton) els.settlementReportButton.disabled = true;
+  if (els.settlementAccountingReportButton) els.settlementAccountingReportButton.disabled = true;
   if (els.settlementStatus) {
     els.settlementStatus.innerHTML = currentSettlementFiles.length
       ? `${statusIcon()} ${plural(currentSettlementFiles.length, "settlement file")} selected`
@@ -659,6 +664,7 @@ function renderSettlementResult(result) {
   }
   if (els.settlementXmlButton) els.settlementXmlButton.disabled = errors.length > 0 || !result.xml;
   if (els.settlementReportButton) els.settlementReportButton.disabled = !result.reportCsv;
+  if (els.settlementAccountingReportButton) els.settlementAccountingReportButton.disabled = errors.length > 0 || !result.accountingReportCsv;
   if (els.settlementStatus) {
     els.settlementStatus.innerHTML = errors.length
       ? `${statusIcon()} ${errors.length} settlement error(s) need review`
@@ -681,6 +687,7 @@ function applySettlementDateFilter() {
     setStatus("Selected settlement From date cannot be after To date.", "bad");
     if (els.settlementXmlButton) els.settlementXmlButton.disabled = true;
     if (els.settlementReportButton) els.settlementReportButton.disabled = true;
+    if (els.settlementAccountingReportButton) els.settlementAccountingReportButton.disabled = true;
     return;
   }
 
@@ -731,6 +738,7 @@ function renderResult(result) {
   const hasErrors = result.errors.length > 0;
   els.xmlButton.disabled = hasErrors || !result.xml;
   els.reportButton.disabled = !result.reportCsv;
+  if (els.accountingReportButton) els.accountingReportButton.disabled = hasErrors || !result.accountingReportCsv;
   setStatus(
     hasErrors
       ? `Found ${result.errors.length} error(s). Fix them before importing into Tally.`
@@ -748,6 +756,7 @@ function applyDateFilter() {
     setStatus("Selected From date cannot be after To date.", "bad");
     els.xmlButton.disabled = true;
     els.reportButton.disabled = true;
+    if (els.accountingReportButton) els.accountingReportButton.disabled = true;
     return;
   }
 
@@ -813,6 +822,7 @@ async function processFile() {
     setStatus(`Could not process file: ${error.message}`, "bad");
     els.xmlButton.disabled = true;
     els.reportButton.disabled = true;
+    if (els.accountingReportButton) els.accountingReportButton.disabled = true;
   } finally {
     els.processButton.disabled = !currentSalesFiles.length;
   }
@@ -837,6 +847,7 @@ async function processSettlementFile() {
     setStatus(`Could not process settlement file: ${error.message}`, "bad");
     if (els.settlementXmlButton) els.settlementXmlButton.disabled = true;
     if (els.settlementReportButton) els.settlementReportButton.disabled = true;
+    if (els.settlementAccountingReportButton) els.settlementAccountingReportButton.disabled = true;
     if (els.settlementStatus) els.settlementStatus.innerHTML = `${statusIcon()} Settlement processing failed`;
   } finally {
     els.processSettlementButton.disabled = !currentSettlementFiles.length;
@@ -939,6 +950,13 @@ els.reportButton.addEventListener("click", () => {
   downloadText("amazon-sales-import-report.csv", currentResult.reportCsv, "text/csv;charset=utf-8");
 });
 
+if (els.accountingReportButton) {
+  els.accountingReportButton.addEventListener("click", () => {
+    if (!currentResult || !currentResult.accountingReportCsv) return;
+    downloadText("amazon-sales-accounting-preview.csv", currentResult.accountingReportCsv, "text/csv;charset=utf-8");
+  });
+}
+
 if (els.settlementXmlButton) {
   els.settlementXmlButton.addEventListener("click", () => {
     if (!currentSettlementResult || !currentSettlementResult.xml) return;
@@ -950,6 +968,13 @@ if (els.settlementReportButton) {
   els.settlementReportButton.addEventListener("click", () => {
     if (!currentSettlementResult || !currentSettlementResult.reportCsv) return;
     downloadText("amazon-settlement-report.csv", currentSettlementResult.reportCsv, "text/csv;charset=utf-8");
+  });
+}
+
+if (els.settlementAccountingReportButton) {
+  els.settlementAccountingReportButton.addEventListener("click", () => {
+    if (!currentSettlementResult || !currentSettlementResult.accountingReportCsv) return;
+    downloadText("amazon-settlement-accounting-preview.csv", currentSettlementResult.accountingReportCsv, "text/csv;charset=utf-8");
   });
 }
 

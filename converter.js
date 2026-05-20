@@ -974,6 +974,86 @@
     return toCsv(rows, ["row", "invoiceNo", "severity", "message"]);
   }
 
+  function debitAmount(amount) {
+    return amount < 0 ? formatAmount(Math.abs(amount)) : "";
+  }
+
+  function creditAmount(amount) {
+    return amount > 0 ? formatAmount(amount) : "";
+  }
+
+  function addAccountingRow(rows, voucher, lineType, ledgerOrItem, amount, details = {}) {
+    if (!round2(amount)) return;
+    const referenceNo = voucher.referenceNo || voucher.orderId || "";
+    rows.push({
+      "Voucher Date": displayTallyDate(voucher.invoiceDate),
+      "Voucher Type": voucher.voucherType,
+      "Voucher No": voucher.voucherNo,
+      "Reference No": referenceNo,
+      "Buyer Order No": voucher.orderId || "",
+      "Party Ledger": voucher.partyLedger,
+      "Transaction Type": voucher.voucherKind,
+      "Line Type": lineType,
+      "Ledger / Stock Item": ledgerOrItem,
+      Debit: debitAmount(amount),
+      Credit: creditAmount(amount),
+      Quantity: details.quantity || "",
+      Rate: details.rate || "",
+      "Bill / Order Ref": details.billRef || voucher.billReferenceNo || voucher.orderId || referenceNo || voucher.voucherNo,
+      GSTIN: voucher.billToGstin || voucher.shipToGstin || "",
+      "Address Source": voucher.addressSource || "CSV",
+      Basis: details.basis || "",
+      "Expected Tally Effect": amount < 0 ? "Debit" : "Credit",
+    });
+  }
+
+  function buildAccountingReportCsv(vouchers, configInput) {
+    const config = { ...DEFAULT_CONFIG, ...configInput };
+    const headers = [
+      "Voucher Date",
+      "Voucher Type",
+      "Voucher No",
+      "Reference No",
+      "Buyer Order No",
+      "Party Ledger",
+      "Transaction Type",
+      "Line Type",
+      "Ledger / Stock Item",
+      "Debit",
+      "Credit",
+      "Quantity",
+      "Rate",
+      "Bill / Order Ref",
+      "GSTIN",
+      "Address Source",
+      "Basis",
+      "Expected Tally Effect",
+    ];
+    const rows = [];
+    vouchers.forEach((voucher) => {
+      const partyAmount = voucher.isCreditNote ? voucher.invoiceTotal : -voucher.invoiceTotal;
+      addAccountingRow(rows, voucher, "Ledger", voucher.partyLedger, partyAmount, { basis: "Party ledger total for voucher" });
+      voucher.lines.forEach((item) => {
+        const salesAmount = voucher.isCreditNote ? -item.taxable : item.taxable;
+        addAccountingRow(rows, voucher, "Inventory Accounting Allocation", config.salesLedgerName, salesAmount, {
+          quantity: `${item.quantity} ${item.unitName}`,
+          rate: `${formatAmount(item.rate)}/${item.unitName}`,
+          billRef: item.orderId || voucher.orderId || "",
+          basis: item.stockName,
+        });
+      });
+      const taxSign = voucher.isCreditNote ? -1 : 1;
+      addAccountingRow(rows, voucher, "Ledger", config.cgstLedgerName, taxSign * voucher.cgstTotal, { basis: "Output CGST as per voucher tax total" });
+      addAccountingRow(rows, voucher, "Ledger", config.sgstLedgerName, taxSign * voucher.sgstTotal, { basis: "Output SGST as per voucher tax total" });
+      addAccountingRow(rows, voucher, "Ledger", config.igstLedgerName, taxSign * voucher.igstTotal, { basis: "Output IGST as per voucher tax total" });
+      if (voucher.roundOff) {
+        const roundOffAmount = voucher.isCreditNote ? -voucher.roundOff : voucher.roundOff;
+        addAccountingRow(rows, voucher, "Ledger", config.roundOffLedgerName, roundOffAmount, { basis: "Difference between invoice total and taxable plus tax" });
+      }
+    });
+    return toCsv(rows, headers);
+  }
+
   function previewRows(vouchers, limit = 100) {
     return vouchers.slice(0, limit).map((voucher) => ({
       invoiceNo: voucher.isCreditNote ? voucher.sourceInvoiceNo : voucher.invoiceNo,
@@ -1034,6 +1114,7 @@
         },
         xml: "",
         reportCsv: "",
+        accountingReportCsv: "",
         preview: [],
       };
     }
@@ -1049,6 +1130,7 @@
       missingColumns,
       xml,
       reportCsv,
+      accountingReportCsv: analysis.errors.length ? "" : buildAccountingReportCsv(analysis.vouchers, analysis.config),
       preview: previewRows(analysis.vouchers),
     };
   }
@@ -1061,6 +1143,7 @@
     convertCsvText,
     buildXml,
     buildReportCsv,
+    buildAccountingReportCsv,
     formatAmount,
   };
 });

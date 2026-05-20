@@ -484,6 +484,20 @@
     });
   }
 
+  function settlementLedgerBuckets(settlement, config) {
+    const blrTotal = settlement.blrBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
+    const delTotal = settlement.delBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
+    const otherTotal = settlement.otherChargeBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
+    const reimbursementTotal = settlement.reimbursementBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
+    const ledgerBuckets = [];
+    addLedgerBucket(ledgerBuckets, config.feeLedgerBlrName, blrTotal, settlement.blrBills);
+    addLedgerBucket(ledgerBuckets, config.feeLedgerDelName, delTotal, settlement.delBills);
+    addLedgerBucket(ledgerBuckets, config.otherChargesLedgerName, otherTotal, settlement.otherChargeBills);
+    addLedgerBucket(ledgerBuckets, config.reimbursementLedgerName, reimbursementTotal, settlement.reimbursementBills);
+    sortLedgerBuckets(ledgerBuckets, config);
+    return { ledgerBuckets, blrTotal, delTotal, otherTotal, reimbursementTotal };
+  }
+
   function buildVoucherXml(settlement, config, index) {
     const voucherNumberStart = Number(config.settlementVoucherNumberStart);
     const voucherNo = Number.isFinite(voucherNumberStart) && voucherNumberStart > 0
@@ -518,16 +532,7 @@
       )
     );
 
-    const blrTotal = settlement.blrBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
-    const delTotal = settlement.delBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
-    const otherTotal = settlement.otherChargeBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
-    const reimbursementTotal = settlement.reimbursementBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
-    const ledgerBuckets = [];
-    addLedgerBucket(ledgerBuckets, config.feeLedgerBlrName, blrTotal, settlement.blrBills);
-    addLedgerBucket(ledgerBuckets, config.feeLedgerDelName, delTotal, settlement.delBills);
-    addLedgerBucket(ledgerBuckets, config.otherChargesLedgerName, otherTotal, settlement.otherChargeBills);
-    addLedgerBucket(ledgerBuckets, config.reimbursementLedgerName, reimbursementTotal, settlement.reimbursementBills);
-    sortLedgerBuckets(ledgerBuckets, config);
+    const { ledgerBuckets, blrTotal, delTotal, otherTotal, reimbursementTotal } = settlementLedgerBuckets(settlement, config);
     ledgerBuckets.forEach((bucket) => lines.push(...ledgerBucketXml(bucket, 10)));
     lines.push(...ledgerEntryXml(config.tcsLedgerName, settlement.tcs, true, [], 10));
     lines.push(...ledgerEntryXml(config.tdsLedgerName, settlement.tds, true, [], 10));
@@ -670,6 +675,95 @@
     return toCsv(reportRows(errors, warnings), headers);
   }
 
+  function debitAmount(amount) {
+    return amount < 0 ? formatAmount(Math.abs(amount)) : "";
+  }
+
+  function creditAmount(amount) {
+    return amount > 0 ? formatAmount(amount) : "";
+  }
+
+  function settlementVoucherNumber(settlement, config, index) {
+    const voucherNumberStart = Number(config.settlementVoucherNumberStart);
+    return Number.isFinite(voucherNumberStart) && voucherNumberStart > 0
+      ? String(voucherNumberStart + index)
+      : settlement.id;
+  }
+
+  function addPostingRow(rows, settlement, config, index, lineType, ledgerName, amount, billRef, basis) {
+    if (!round2(amount)) return;
+    rows.push({
+      "Voucher Date": displayTallyDate(settlement.date),
+      "Voucher Type": config.settlementVoucherType,
+      "Voucher No": settlementVoucherNumber(settlement, config, index),
+      "Reference No": settlement.id,
+      "Settlement ID": settlement.id,
+      "Line Type": lineType,
+      "Ledger / Stock Item": ledgerName,
+      Debit: debitAmount(amount),
+      Credit: creditAmount(amount),
+      "Bill / Order Ref": billRef || "",
+      Basis: basis || "",
+      "Expected Tally Effect": amount < 0 ? "Debit" : "Credit",
+    });
+  }
+
+  function buildAccountingReportCsv(settlements, configInput) {
+    const config = { ...DEFAULT_CONFIG, ...configInput };
+    const headers = [
+      "Voucher Date",
+      "Voucher Type",
+      "Voucher No",
+      "Reference No",
+      "Settlement ID",
+      "Line Type",
+      "Ledger / Stock Item",
+      "Debit",
+      "Credit",
+      "Bill / Order Ref",
+      "Basis",
+      "Expected Tally Effect",
+    ];
+    const rows = [];
+    settlements.forEach((settlement, index) => {
+      addPostingRow(rows, settlement, config, index, "Ledger", config.settlementPartyLedgerName, -settlement.totalAmount, settlement.id, "Amazon payout ledger / bank transfer receivable");
+      const { ledgerBuckets, blrTotal, delTotal, otherTotal, reimbursementTotal } = settlementLedgerBuckets(settlement, config);
+      ledgerBuckets.forEach((bucket) => {
+        addPostingRow(rows, settlement, config, index, "Ledger", bucket.ledgerName, bucket.amount, "", "Amazon fees, charges, or reimbursements");
+        bucket.bills.forEach((bill) => addPostingRow(rows, settlement, config, index, "Bill Allocation", bucket.ledgerName, bill.amount, bill.name, "Bill allocation inside the ledger entry"));
+      });
+      addPostingRow(rows, settlement, config, index, "Ledger", config.tcsLedgerName, settlement.tcs, "", "TCS receivable from Amazon settlement");
+      addPostingRow(rows, settlement, config, index, "Ledger", config.tdsLedgerName, settlement.tds, "", "TDS receivable from Amazon settlement");
+
+      const salesEntries = [config.b2bPartyLedgerName, config.partyLedgerName]
+        .filter((ledgerName, entryIndex, list) => ledgerName && list.indexOf(ledgerName) === entryIndex && settlement.salesByLedger.has(ledgerName))
+        .map((ledgerName) => [ledgerName, settlement.salesByLedger.get(ledgerName)]);
+      Array.from(settlement.salesByLedger.entries()).forEach(([ledgerName, amount]) => {
+        if (!salesEntries.some(([existingLedger]) => existingLedger === ledgerName)) salesEntries.push([ledgerName, amount]);
+      });
+      salesEntries.forEach(([ledgerName, amount]) => {
+        addPostingRow(rows, settlement, config, index, "Ledger", ledgerName, amount, "", "Clears imported Amazon sales / credit note vouchers");
+        settlement.orderBills
+          .filter((bill) => bill.ledgerName === ledgerName)
+          .forEach((bill) => addPostingRow(rows, settlement, config, index, "Bill Allocation", ledgerName, bill.amount, bill.orderId, "Order-level bill allocation against sales clearing ledger"));
+      });
+      const balance = round2(
+        -settlement.totalAmount +
+          blrTotal +
+          delTotal +
+          otherTotal +
+          reimbursementTotal +
+          settlement.tcs +
+          settlement.tds +
+          Array.from(settlement.salesByLedger.values()).reduce((sum, amount) => round2(sum + amount), 0)
+      );
+      if (Math.abs(balance) >= 0.01) {
+        addPostingRow(rows, settlement, config, index, "Ledger", config.roundOffLedgerName, -balance, "", "Auto balancing round off line");
+      }
+    });
+    return toCsv(rows, headers);
+  }
+
   function convertRecords(records, configInput) {
     const analysis = analyze(records, configInput);
     const xml = analysis.errors.length ? "" : buildXml(analysis.settlements, analysis.config);
@@ -695,6 +789,7 @@
       xml,
       preview: previewRows(analysis.settlements, analysis.config),
       reportCsv: buildReportCsv(analysis.errors, analysis.warnings),
+      accountingReportCsv: analysis.errors.length ? "" : buildAccountingReportCsv(analysis.settlements, analysis.config),
     };
   }
 
