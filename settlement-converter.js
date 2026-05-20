@@ -160,25 +160,14 @@
     return Boolean(get(record, "settlement-id")) && Boolean(get(record, "total-amount")) && !get(record, "transaction-type") && !get(record, "amount-type");
   }
 
-  function orderClassification(row, config, warnings, settlementId) {
+  function orderClassification(row, config) {
     const explicit = String(get(row, "transaction") || "").trim().toUpperCase();
-    if (explicit === "B2B" || explicit === "B2C") return explicit;
+    if (explicit === "B2B" || explicit === "B2C") return { classification: explicit, source: "Excel transaction column" };
     const orderId = String(get(row, "order-id") || "").trim();
     const learned = config.orderClassifications && config.orderClassifications[orderId];
-    if (learned === "B2B" || learned === "B2C") return learned;
-    if (orderId) {
-      const warningKey = `missing-classification-${settlementId}`;
-      if (!warnings.some((warning) => warning.key === warningKey)) {
-        warnings.push({
-          key: warningKey,
-          settlementId,
-          severity: "Warning",
-          message: "Some settlement rows do not say B2B/B2C. They were treated as B2C unless matched from uploaded sales files.",
-        });
-      }
-      return "B2C";
-    }
-    return "";
+    if (learned === "B2B" || learned === "B2C") return { classification: learned, source: "Uploaded sales file mapping" };
+    if (orderId) return { classification: "B2C", source: "Assumed B2C", assumed: true };
+    return { classification: "", source: "Not available" };
   }
 
   function addTo(map, key, value) {
@@ -212,13 +201,59 @@
     });
   }
 
+  function addClassificationAssumption(map, row, settlement, ledgerName, amount) {
+    const orderId = String(get(row, "order-id") || "").trim();
+    if (!orderId) return;
+    const sourceFile = String(get(row, "__sourceFile") || "").trim();
+    const sourceRow = String(get(row, "__rowNumber") || "").trim();
+    const existing = map.get(orderId) || {
+      orderId,
+      rows: 0,
+      amount: 0,
+      sources: new Set(),
+      sourceRows: new Set(),
+      ledgerName,
+    };
+    existing.rows += 1;
+    existing.amount = round2(existing.amount + amount);
+    existing.ledgerName = ledgerName;
+    if (sourceFile) existing.sources.add(sourceFile);
+    if (sourceRow) existing.sourceRows.add(sourceRow);
+    map.set(orderId, existing);
+  }
+
+  function addClassificationWarning(warnings, settlement, settlementDate, assumptions, config) {
+    const items = Array.from(assumptions.values()).filter((item) => round2(item.amount));
+    if (!items.length) return;
+    const affectedAmount = items.reduce((sum, item) => round2(sum + item.amount), 0);
+    warnings.push({
+      key: `assumed-b2c-${settlement.id}`,
+      issueCode: "SALES_LEDGER_CLASSIFICATION_ASSUMED",
+      severity: "Warning",
+      settlementId: settlement.id,
+      settlementDate: displayTallyDate(settlementDate),
+      affectedOrders: items.length,
+      affectedRows: items.reduce((sum, item) => sum + item.rows, 0),
+      affectedAmount: formatAmount(affectedAmount),
+      affectedOrderIds: items.map((item) => item.orderId).join(" | "),
+      sourceFiles: Array.from(new Set(items.flatMap((item) => Array.from(item.sources)))).join(" | "),
+      sourceRows: Array.from(new Set(items.flatMap((item) => Array.from(item.sourceRows)))).join(" | "),
+      assumptionApplied: `Posted to ${config.partyLedgerName}`,
+      accountingImpact: `If any affected order is B2B, the sales clearing should be ${config.b2bPartyLedgerName} instead of ${config.partyLedgerName}. Payout, fees, TCS, and TDS are not changed by this warning.`,
+      howToFix: "Upload the matching Amazon B2B/B2C sales files before validating, or add/correct the transaction column in the settlement workbook so every affected order says B2B or B2C.",
+      message: `${items.length} order(s) in this settlement had no B2B/B2C classification and were assumed as B2C for sales ledger clearing.`,
+    });
+  }
+
   function buildSettlement(records, settlement, config, warnings) {
+    const date = settlement.depositDate ? addDays(settlement.depositDate, -1) : settlement.endDate || settlement.startDate;
     const salesByLedger = new Map();
     const orderGross = new Map();
     const blrBills = [];
     const delBills = [];
     const otherChargeBills = [];
     const reimbursementBills = [];
+    const classificationAssumptions = new Map();
     let tcs = 0;
     let tds = 0;
 
@@ -228,12 +263,14 @@
       const transactionType = String(get(row, "transaction-type") || "").trim();
       const orderId = String(get(row, "order-id") || "").trim();
       const amount = parseMoney(get(row, "amount"));
-      const classification = orderClassification(row, config, warnings, settlement.id);
+      const classificationInfo = orderClassification(row, config);
+      const classification = classificationInfo.classification;
 
       if ((amountType === "ItemPrice" || amountType === "Promotion") && orderId) {
         const ledgerName = classification === "B2B" ? config.b2bPartyLedgerName : config.partyLedgerName;
         addTo(salesByLedger, ledgerName, amount);
         addTo(orderGross, `${ledgerName}|||${orderId}`, amount);
+        if (classificationInfo.assumed) addClassificationAssumption(classificationAssumptions, row, settlement, ledgerName, amount);
         return;
       }
 
@@ -268,6 +305,7 @@
 
     sortBillsByPreferredOrder(blrBills, ["Commission", "Fixed closing fee", "IGST"]);
     sortBillsByPreferredOrder(delBills, ["CGST", "FBA Pick & Pack Fee", "FBA Weight Handling Fee", "SGST", "Shipping Chargeback"]);
+    addClassificationWarning(warnings, settlement, date, classificationAssumptions, config);
 
     const positiveOrderBills = Array.from(orderGross.entries())
       .map(([key, amount]) => {
@@ -279,7 +317,7 @@
 
     return {
       ...settlement,
-      date: settlement.depositDate ? addDays(settlement.depositDate, -1) : settlement.endDate || settlement.startDate,
+      date,
       salesByLedger,
       orderBills: positiveOrderBills,
       blrBills,
@@ -347,8 +385,16 @@
     allSettlements.forEach((settlement) => {
       if (!settlement.totalAmount) {
         errors.push({
+          issueCode: "SETTLEMENT_TOTAL_MISSING",
           settlementId: settlement.id,
+          settlementDate: displayTallyDate(settlement.date),
           severity: "Error",
+          affectedOrders: "",
+          affectedRows: settlement.rows.length,
+          affectedAmount: "",
+          assumptionApplied: "XML blocked for this settlement",
+          accountingImpact: "The payout ledger amount cannot be verified without the settlement header total.",
+          howToFix: "Upload the complete enriched settlement workbook, including the settlement header row with total-amount.",
           message: "Settlement total amount is missing. Upload the complete settlement report header row.",
         });
       }
@@ -566,8 +612,62 @@
     return [headers.join(","), ...rows.map((row) => headers.map((header) => escapeCell(row[header])).join(","))].join("\n");
   }
 
+  function reportRows(errors, warnings) {
+    const issues = [...errors, ...warnings];
+    if (!issues.length) {
+      return [{
+        Severity: "Info",
+        "Issue Code": "NO_ISSUES_FOUND",
+        "Settlement ID": "",
+        "Voucher Date": "",
+        "Affected Orders": "0",
+        "Affected Rows": "0",
+        "Affected Amount": "0.00",
+        "Affected Order IDs": "",
+        "Source File / Sheet": "",
+        "Source Rows": "",
+        "Assumption Applied": "None",
+        "Accounting Impact": "No settlement validation warnings or errors were found for the selected date range.",
+        "How To Fix": "No action required.",
+        Details: "The XML was generated without validation exceptions.",
+      }];
+    }
+    return issues.map((issue) => ({
+      Severity: issue.severity || "",
+      "Issue Code": issue.issueCode || issue.key || "",
+      "Settlement ID": issue.settlementId || "",
+      "Voucher Date": issue.settlementDate || "",
+      "Affected Orders": issue.affectedOrders == null ? "" : issue.affectedOrders,
+      "Affected Rows": issue.affectedRows == null ? "" : issue.affectedRows,
+      "Affected Amount": issue.affectedAmount == null ? "" : issue.affectedAmount,
+      "Affected Order IDs": issue.affectedOrderIds || "",
+      "Source File / Sheet": issue.sourceFiles || "",
+      "Source Rows": issue.sourceRows || "",
+      "Assumption Applied": issue.assumptionApplied || "",
+      "Accounting Impact": issue.accountingImpact || "",
+      "How To Fix": issue.howToFix || "",
+      Details: issue.message || "",
+    }));
+  }
+
   function buildReportCsv(errors, warnings) {
-    return toCsv([...errors, ...warnings], ["settlementId", "severity", "message"]);
+    const headers = [
+      "Severity",
+      "Issue Code",
+      "Settlement ID",
+      "Voucher Date",
+      "Affected Orders",
+      "Affected Rows",
+      "Affected Amount",
+      "Affected Order IDs",
+      "Source File / Sheet",
+      "Source Rows",
+      "Assumption Applied",
+      "Accounting Impact",
+      "How To Fix",
+      "Details",
+    ];
+    return toCsv(reportRows(errors, warnings), headers);
   }
 
   function convertRecords(records, configInput) {

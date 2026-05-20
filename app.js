@@ -39,6 +39,7 @@ const els = {
   settlementDateTo: document.querySelector("[data-settlement-date-to]"),
   settlementDateReset: document.querySelector("[data-settlement-date-reset]"),
   settlementDateFilterHelp: document.querySelector("[data-settlement-date-filter-help]"),
+  settlementIssueNote: document.querySelector("[data-settlement-issue-note]"),
   utilityTabs: Array.from(document.querySelectorAll("[data-utility-tab]")),
   utilityTitle: document.querySelector("[data-utility-title]"),
   utilitySubtitle: document.querySelector("[data-utility-subtitle]"),
@@ -241,6 +242,7 @@ function selectSettlementFiles(files) {
     els.settlementPreviewBody.innerHTML = '<tr><td colspan="10" class="empty">Upload a settlement workbook and validate it to see voucher details here.</td></tr>';
   }
   if (els.settlementDateFilter) els.settlementDateFilter.hidden = true;
+  if (els.settlementIssueNote) els.settlementIssueNote.hidden = true;
   if (els.settlementReadyLabel) els.settlementReadyLabel.textContent = currentSettlementFiles.length ? "(Ready to validate)" : "(Waiting for upload)";
 }
 
@@ -383,8 +385,8 @@ async function readSalesFilesAsCsvText(files) {
 function recordsFromRows(rows, source = "") {
   if (!rows.length) return [];
   const headers = rows[0].map((header) => String(header).trim());
-  return rows.slice(1).map((row) => {
-    const record = { __sourceFile: source };
+  return rows.slice(1).map((row, index) => {
+    const record = { __sourceFile: source, __rowNumber: index + 2 };
     headers.forEach((header, index) => {
       record[header] = row[index] == null ? "" : row[index];
     });
@@ -575,7 +577,7 @@ function renderSettlementEmptySummary(primary = "Upload file", caption = "Waitin
     <div class="metric"><span>Total payout</span><strong>0</strong><small>Ready after validation</small></div>
     <div class="metric sales-metric"><span>Sales clearing</span><strong>0</strong><small>B2B + B2C ledgers</small></div>
     <div class="metric refund-metric"><span>Fees & charges</span><strong>0</strong><small>Amazon deductions</small></div>
-    <div class="metric pdf-metric"><span>Issues found</span><strong>0</strong><small>Warnings and errors</small></div>
+    <div class="metric pdf-metric"><span>Review items</span><strong>0</strong><small>Audit report after validation</small></div>
   `;
 }
 
@@ -620,8 +622,17 @@ function renderSettlementResult(result) {
       <div class="metric"><span>Total payout</span><strong>${AmazonSettlementConverter.formatAmount(result.summary.totalPayout)}</strong><small>Amazon transfer total</small></div>
       <div class="metric sales-metric"><span>Sales clearing</span><strong>${AmazonSettlementConverter.formatAmount(salesTotal)}</strong><small>B2B + B2C ledgers</small></div>
       <div class="metric refund-metric"><span>Fees & charges</span><strong>${AmazonSettlementConverter.formatAmount(feeTotal)}</strong><small>Amazon deductions</small></div>
-      <div class="metric pdf-metric"><span>Issues found</span><strong>${warnings.length + errors.length}</strong><small>${warnings.length} warnings, ${errors.length} errors</small></div>
+      <div class="metric pdf-metric"><span>Review items</span><strong>${warnings.length + errors.length}</strong><small>${warnings.length} warnings, ${errors.length} errors</small></div>
     `;
+  }
+  if (els.settlementIssueNote) {
+    els.settlementIssueNote.hidden = false;
+    els.settlementIssueNote.dataset.tone = errors.length ? "bad" : warnings.length ? "warn" : "good";
+    els.settlementIssueNote.innerHTML = errors.length
+      ? `${statusIcon()} <span><strong>${errors.length} error(s) found.</strong> XML is blocked until these are corrected. Download the audit report for settlement IDs, affected rows, accounting impact, and fix steps.</span>`
+      : warnings.length
+        ? `${statusIcon()} <span><strong>${warnings.length} warning(s) need review.</strong> XML can still be generated, but the audit report explains every assumption, affected amount, ledger impact, and how to correct it before import.</span>`
+        : `${statusIcon()} <span><strong>No review items found.</strong> The audit report is still available and confirms there were no settlement validation exceptions for the selected date range.</span>`;
   }
   if (els.settlementReadyLabel) els.settlementReadyLabel.textContent = errors.length ? "(Needs review)" : "(Ready to generate XML)";
   if (els.settlementPreviewBody) {

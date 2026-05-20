@@ -1051,6 +1051,47 @@ textarea:focus {
   min-height: 44px;
 }
 
+.settlement-issue-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid #cdebe4;
+  border-radius: 12px;
+  background: #f2fbf8;
+  color: var(--green-strong);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.settlement-issue-note[hidden] {
+  display: none;
+}
+
+.settlement-issue-note svg {
+  width: 18px;
+  min-width: 18px;
+  margin-top: 1px;
+}
+
+.settlement-issue-note strong {
+  display: block;
+  color: var(--ink);
+}
+
+.settlement-issue-note[data-tone="warn"] {
+  border-color: #f2dfc4;
+  background: #fff8ed;
+  color: #9a5b00;
+}
+
+.settlement-issue-note[data-tone="bad"] {
+  border-color: #ffd0d0;
+  background: #fff5f5;
+  color: #b42318;
+}
+
 .readiness-banner {
   display: flex;
   align-items: center;
