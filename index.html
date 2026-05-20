@@ -333,33 +333,134 @@
             </div>
           </details>
 
-          <section class="settlement-panel" id="settlementPanel" data-utility-view="settlement">
-            <div class="section-heading settlement-heading">
-              <div class="heading-icon success" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M5 7.5h14"></path><path d="M7 4.5h10v15H7z"></path><path d="M9.5 11h5"></path><path d="M9.5 14.5h3.8"></path></svg>
-              </div>
-              <div>
-                <h2>Amazon Settlement Accounting</h2>
-                <p>Generate Journal XML for Amazon payout, fees, TCS, TDS, reimbursements, and ledger clearing.</p>
-              </div>
-            </div>
-            <div class="settlement-content">
-              <div class="settlement-upload-card">
-                <label class="drop-zone file-drop compact-drop" data-settlement-drop-zone>
+          <section class="settlement-workspace" id="settlementPanel" data-utility-view="settlement">
+            <section class="workflow-stage settlement-flow" aria-label="Settlement workflow">
+              <article class="workflow-card">
+                <div class="workflow-heading">
+                  <span class="step-badge">1</span>
+                  <div>
+                    <h2>Upload settlement<br>Excel file</h2>
+                  </div>
+                </div>
+                <label class="drop-zone file-drop" data-settlement-drop-zone>
                   <input id="settlementInput" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" multiple>
                   <span class="file-icon csv-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M7 3.5h7l3 3V20H7z"></path><path d="M14 3.5v3h3"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path></svg>
                   </span>
                   <strong data-settlement-file-name>Choose settlement Excel files</strong>
-                  <small>Use the enriched Amazon settlement workbook with B2B/B2C and GST columns</small>
+                  <small>Use the enriched workbook with B2B/B2C and GST columns</small>
                 </label>
                 <div class="upload-state" data-settlement-status>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.8 12.5 2.1 2.1 4.4-4.6"></path><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"></path></svg>
                   Waiting for settlement report
                 </div>
+              </article>
+
+              <span class="workflow-connector" aria-hidden="true"></span>
+
+              <article class="workflow-card generate-card">
+                <div class="workflow-heading">
+                  <span class="step-badge">2</span>
+                  <div>
+                    <h2>Validate & Preview</h2>
+                    <p>Review payout accounting</p>
+                  </div>
+                </div>
+                <div class="xml-preview-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M7 3.5h7l3 3V20H7z"></path><path d="M14 3.5v3h3"></path><path d="M8.7 14.5 10 13l1.3 1.5"></path><path d="M13.1 13v3"></path><path d="M16 13v3h1.6"></path></svg>
+                  <span>XML</span>
+                </div>
+                <button id="processSettlementButton" class="primary" type="button" disabled>
+                  <span>Validate Settlement</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                </button>
+              </article>
+
+              <span class="workflow-connector" aria-hidden="true"></span>
+
+              <article class="workflow-card generate-card">
+                <div class="workflow-heading">
+                  <span class="step-badge">3</span>
+                  <div>
+                    <h2>Download XML</h2>
+                    <p>Import into TallyPrime</p>
+                  </div>
+                </div>
+                <div class="xml-preview-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M7 3.5h7l3 3V20H7z"></path><path d="M14 3.5v3h3"></path><path d="M12 4v10"></path><path d="m8 10 4 4 4-4"></path></svg>
+                  <span>XML</span>
+                </div>
+                <button id="downloadSettlementXml" class="primary download-primary" type="button" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10"></path><path d="m8 10 4 4 4-4"></path><path d="M5 20h14"></path></svg>
+                  Download XML
+                </button>
+              </article>
+            </section>
+
+            <section class="summary-panel settlement-brief">
+              <div class="section-heading">
+                <div class="heading-icon success" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M7 3.5h7l3 3V20H7z"></path><path d="M14 3.5v3h3"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path></svg>
+                </div>
+                <div>
+                  <h2>Import Brief <span data-settlement-ready-label>(Waiting for upload)</span></h2>
+                  <p>Based on your settlement workbook</p>
+                </div>
+                <button id="downloadSettlementReport" type="button" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l3 3V20H7z"></path><path d="M14 3.5v3h3"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path></svg>
+                  Report
+                </button>
               </div>
 
-              <div class="settlement-settings">
+              <div class="metrics settlement-metrics" data-settlement-summary>
+                <div class="metric range-metric"><span>Settlement vouchers</span><strong>Upload file</strong><small>Waiting for Excel</small></div>
+                <div class="metric"><span>Total payout</span><strong>0</strong><small>Ready after validation</small></div>
+                <div class="metric sales-metric"><span>Sales clearing</span><strong>0</strong><small>B2B + B2C ledgers</small></div>
+                <div class="metric refund-metric"><span>Fees & charges</span><strong>0</strong><small>Amazon deductions</small></div>
+                <div class="metric pdf-metric"><span>Issues found</span><strong>0</strong><small>Warnings and errors</small></div>
+              </div>
+            </section>
+
+            <section class="preview-panel settlement-preview-panel">
+              <div class="section-heading compact">
+                <div class="heading-icon purple" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M5 7.5h14"></path><path d="M7 4.5h10v15H7z"></path><path d="M9.5 11h5"></path><path d="M9.5 14.5h3.8"></path></svg>
+                </div>
+                <div>
+                  <h2>Settlement Preview <span class="soft-count">Journal vouchers</span></h2>
+                </div>
+              </div>
+              <div class="table-wrap settlement-preview">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Settlement ID</th>
+                      <th>Date</th>
+                      <th class="num">Payout</th>
+                      <th class="num">Sales clearing</th>
+                      <th class="num">B2B</th>
+                      <th class="num">B2C</th>
+                      <th class="num">Fees</th>
+                      <th class="num">TCS</th>
+                      <th class="num">TDS</th>
+                      <th class="num">Orders</th>
+                    </tr>
+                  </thead>
+                  <tbody data-settlement-preview-body>
+                    <tr><td colspan="10" class="empty">Upload a settlement workbook and validate it to see voucher details here.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <details class="settings-panel settlement-settings-panel">
+              <summary>
+                <span>
+                  <strong>Settlement setup</strong>
+                  <em>Open only if ledger names differ in your Tally company.</em>
+                </span>
+              </summary>
+              <div class="settings-content">
                 <div class="field-grid">
                   <label>
                     <span>Settlement voucher type</span>
@@ -399,48 +500,7 @@
                   </label>
                 </div>
               </div>
-
-              <div class="settlement-actions">
-                <button id="processSettlementButton" class="primary" type="button" disabled>
-                  <span>Validate Settlement</span>
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-                </button>
-                <button id="downloadSettlementXml" type="button" disabled>
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10"></path><path d="m8 10 4 4 4-4"></path><path d="M5 20h14"></path></svg>
-                  Download Settlement XML
-                </button>
-                <button id="downloadSettlementReport" type="button" disabled>
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l3 3V20H7z"></path><path d="M14 3.5v3h3"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path></svg>
-                  Settlement Report
-                </button>
-              </div>
-
-              <div class="settlement-summary" data-settlement-summary>
-                Upload a settlement report to see payout, sales ledger clearing, fees, TCS, and TDS.
-              </div>
-
-              <div class="table-wrap settlement-preview">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Settlement ID</th>
-                      <th>Date</th>
-                      <th class="num">Payout</th>
-                      <th class="num">Sales clearing</th>
-                      <th class="num">B2B</th>
-                      <th class="num">B2C</th>
-                      <th class="num">Fees</th>
-                      <th class="num">TCS</th>
-                      <th class="num">TDS</th>
-                      <th class="num">Orders</th>
-                    </tr>
-                  </thead>
-                  <tbody data-settlement-preview-body>
-                    <tr><td colspan="10" class="empty">Settlement preview will appear here after validation.</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            </details>
           </section>
         </form>
 

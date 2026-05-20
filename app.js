@@ -32,6 +32,7 @@ const els = {
   settlementXmlButton: document.querySelector("#downloadSettlementXml"),
   settlementReportButton: document.querySelector("#downloadSettlementReport"),
   settlementSummary: document.querySelector("[data-settlement-summary]"),
+  settlementReadyLabel: document.querySelector("[data-settlement-ready-label]"),
   settlementPreviewBody: document.querySelector("[data-settlement-preview-body]"),
   utilityTabs: Array.from(document.querySelectorAll("[data-utility-tab]")),
   utilityTitle: document.querySelector("[data-utility-title]"),
@@ -222,13 +223,12 @@ function selectSettlementFiles(files) {
       : `${statusIcon()} Waiting for settlement report`;
   }
   if (els.settlementSummary) {
-    els.settlementSummary.textContent = currentSettlementFiles.length
-      ? "Ready to validate the enriched settlement workbook and generate Journal XML."
-      : "Upload a settlement report to see payout, sales ledger clearing, fees, TCS, and TDS.";
+    renderSettlementEmptySummary(currentSettlementFiles.length ? "Ready to validate" : "Upload file", currentSettlementFiles.length ? "Excel selected" : "Waiting for Excel");
   }
   if (els.settlementPreviewBody) {
-    els.settlementPreviewBody.innerHTML = '<tr><td colspan="10" class="empty">Settlement preview will appear here after validation.</td></tr>';
+    els.settlementPreviewBody.innerHTML = '<tr><td colspan="10" class="empty">Upload a settlement workbook and validate it to see voucher details here.</td></tr>';
   }
+  if (els.settlementReadyLabel) els.settlementReadyLabel.textContent = currentSettlementFiles.length ? "(Ready to validate)" : "(Waiting for upload)";
 }
 
 function downloadText(filename, content, mimeType) {
@@ -555,18 +555,39 @@ function renderIssues(errors, warnings) {
     : '<tr><td colspan="4" class="empty">No validation issues found.</td></tr>';
 }
 
+function renderSettlementEmptySummary(primary = "Upload file", caption = "Waiting for Excel") {
+  if (!els.settlementSummary) return;
+  els.settlementSummary.innerHTML = `
+    <div class="metric range-metric"><span>Settlement vouchers</span><strong>${primary}</strong><small>${caption}</small></div>
+    <div class="metric"><span>Total payout</span><strong>0</strong><small>Ready after validation</small></div>
+    <div class="metric sales-metric"><span>Sales clearing</span><strong>0</strong><small>B2B + B2C ledgers</small></div>
+    <div class="metric refund-metric"><span>Fees & charges</span><strong>0</strong><small>Amazon deductions</small></div>
+    <div class="metric pdf-metric"><span>Issues found</span><strong>0</strong><small>Warnings and errors</small></div>
+  `;
+}
+
 function renderSettlementResult(result) {
   currentSettlementResult = result;
   const warnings = result.warnings || [];
   const errors = result.errors || [];
   if (els.settlementSummary) {
+    const salesTotal = result.settlements.reduce(
+      (sum, settlement) => sum + Array.from(settlement.salesByLedger.values()).reduce((innerSum, amount) => innerSum + amount, 0),
+      0
+    );
+    const feeTotal = result.settlements.reduce(
+      (sum, settlement) => sum + [...settlement.blrBills, ...settlement.delBills, ...settlement.otherChargeBills].reduce((innerSum, bill) => innerSum + bill.amount, 0),
+      0
+    );
     els.settlementSummary.innerHTML = `
-      <strong>${result.summary.settlementCount}</strong> settlement voucher(s) ready,
-      payout <strong>Rs. ${AmazonSettlementConverter.formatAmount(result.summary.totalPayout)}</strong>,
-      warnings <strong>${warnings.length}</strong>,
-      errors <strong>${errors.length}</strong>.
+      <div class="metric range-metric"><span>Settlement vouchers</span><strong>${result.summary.settlementCount}</strong><small>Journal voucher XML</small></div>
+      <div class="metric"><span>Total payout</span><strong>${AmazonSettlementConverter.formatAmount(result.summary.totalPayout)}</strong><small>Amazon transfer total</small></div>
+      <div class="metric sales-metric"><span>Sales clearing</span><strong>${AmazonSettlementConverter.formatAmount(salesTotal)}</strong><small>B2B + B2C ledgers</small></div>
+      <div class="metric refund-metric"><span>Fees & charges</span><strong>${AmazonSettlementConverter.formatAmount(feeTotal)}</strong><small>Amazon deductions</small></div>
+      <div class="metric pdf-metric"><span>Issues found</span><strong>${warnings.length + errors.length}</strong><small>${warnings.length} warnings, ${errors.length} errors</small></div>
     `;
   }
+  if (els.settlementReadyLabel) els.settlementReadyLabel.textContent = errors.length ? "(Needs review)" : "(Ready to generate XML)";
   if (els.settlementPreviewBody) {
     els.settlementPreviewBody.innerHTML = result.preview.length
       ? result.preview
@@ -893,3 +914,4 @@ if (window.AMAZON_TALLY_LEARNED_MAPPING) {
 
 setStatus("Upload Amazon Excel/CSV files to begin.");
 renderEmptyState();
+renderSettlementEmptySummary();
