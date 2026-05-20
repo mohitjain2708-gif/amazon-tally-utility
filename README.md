@@ -21,7 +21,8 @@ Use the `Settlement XML` section for Amazon payout accounting after sales and cr
 2. Confirm the Journal voucher type and settlement ledgers.
 3. Click `Validate Settlement`.
 4. Review payout, sales clearing, fees, TCS, TDS, and order count.
-5. Download `amazon-settlement-tally.xml`.
+5. Optionally choose a smaller settlement date range.
+6. Download `amazon-settlement-tally.xml`.
 
 The enriched workbook should include the user-added `transaction` column (`B2B` / `B2C`) and `GST` column. These fields are used to split clearing entries between `B2B Amazon Sales` and `B2C Amazon Sales`.
 
@@ -59,7 +60,7 @@ Important for public trials:
 - Sales ledger is selected by the user and applied to every inventory allocation.
 - B2B buyer name and GSTIN are still written into buyer/consignee/GST fields where available.
 - When matching invoice PDFs are uploaded, PDF Bill To and Ship To address blocks override the incomplete CSV address fields in the generated XML.
-- Settlement XML is generated as Tally `Journal` vouchers. It clears Amazon sales ledgers and records payout, Amazon fee ledgers, TCS receivable, TDS receivable, reimbursements, and other charges.
+- Settlement XML is generated as Tally `Journal` vouchers. It clears Amazon sales ledgers and records payout, Amazon fee ledgers, TCS receivable, TDS receivable, reimbursements, and other charges. Reimbursements are netted into the BLR Amazon seller ledger by default to match the learned Tally voucher pattern.
 
 ## Tally Notes
 

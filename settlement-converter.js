@@ -17,7 +17,7 @@
     b2bPartyLedgerName: "B2B Amazon Sales",
     partyLedgerName: "B2C Amazon Sales",
     otherChargesLedgerName: "Amazon Other Charges",
-    reimbursementLedgerName: "Amazon Reimbursements",
+    reimbursementLedgerName: "Amazon Seller Services Private Limited - BLR",
     roundOffLedgerName: "Round Off",
     orderClassifications: {},
   };
@@ -197,6 +197,21 @@
     }
   }
 
+  function reimbursementBillName(amountType, description, orderId) {
+    if (/reimbursement/i.test(`${amountType} ${description}`)) return "REIMBURSEMENT";
+    return orderId || description || amountType || "Amazon reimbursement";
+  }
+
+  function sortBillsByPreferredOrder(bills, preferredOrder) {
+    const rank = new Map(preferredOrder.map((name, index) => [name, index]));
+    bills.sort((a, b) => {
+      const aRank = rank.has(a.name) ? rank.get(a.name) : preferredOrder.length;
+      const bRank = rank.has(b.name) ? rank.get(b.name) : preferredOrder.length;
+      if (aRank !== bRank) return aRank - bRank;
+      return a.name.localeCompare(b.name);
+    });
+  }
+
   function buildSettlement(records, settlement, config, warnings) {
     const salesByLedger = new Map();
     const orderGross = new Map();
@@ -247,9 +262,12 @@
 
       if (!STANDARD_AMOUNT_TYPES.has(amountType) || transactionType === "other-transaction") {
         if (amount < 0) addBill(otherChargeBills, description || amountType || "Other Amazon charge", amount);
-        if (amount > 0) addBill(reimbursementBills, orderId || description || amountType || "Amazon reimbursement", amount);
+        if (amount > 0) addBill(reimbursementBills, reimbursementBillName(amountType, description, orderId), amount);
       }
     });
+
+    sortBillsByPreferredOrder(blrBills, ["Commission", "Fixed closing fee", "IGST"]);
+    sortBillsByPreferredOrder(delBills, ["CGST", "FBA Pick & Pack Fee", "FBA Weight Handling Fee", "SGST", "Shipping Chargeback"]);
 
     const positiveOrderBills = Array.from(orderGross.entries())
       .map(([key, amount]) => {
@@ -319,7 +337,12 @@
 
     const allSettlements = Array.from(settlementMap.values())
       .filter((settlement) => settlement.rows.length || settlement.totalAmount)
-      .map((settlement) => buildSettlement(records, settlement, config, warnings));
+      .map((settlement) => buildSettlement(records, settlement, config, warnings))
+      .sort((a, b) => {
+        const dateCompare = String(a.date || "").localeCompare(String(b.date || ""));
+        if (dateCompare) return dateCompare;
+        return String(a.id || "").localeCompare(String(b.id || ""), undefined, { numeric: true });
+      });
 
     allSettlements.forEach((settlement) => {
       if (!settlement.totalAmount) {
@@ -350,7 +373,7 @@
     ]);
   }
 
-  function ledgerEntryXml(name, amount, isDeemedPositive, bills, indent, isPartyLedger = false) {
+  function ledgerEntryXml(name, amount, isDeemedPositive, bills, indent, isPartyLedger = false, billType = "") {
     if (!round2(amount)) return [];
     return [
       `${" ".repeat(indent)}<ALLLEDGERENTRIES.LIST>`,
@@ -366,9 +389,53 @@
       xmlTag("ISPARTYLEDGER", isPartyLedger ? "Yes" : "No", indent + 2),
       xmlTag("ISLASTDEEMEDPOSITIVE", isDeemedPositive ? "Yes" : "No", indent + 2),
       xmlTag("AMOUNT", formatAmount(amount), indent + 2),
-      ...(bills && bills.length ? billAllocationsXml(bills, isPartyLedger ? "New Ref" : "Agst Ref", indent + 2) : []),
+      ...(bills && bills.length ? billAllocationsXml(bills, billType || (isPartyLedger ? "New Ref" : "Agst Ref"), indent + 2) : []),
       `${" ".repeat(indent)}</ALLLEDGERENTRIES.LIST>`,
     ];
+  }
+
+  function addLedgerBucket(buckets, ledgerName, amount, bills, isPartyLedger = true) {
+    if (!ledgerName || !round2(amount)) return;
+    const existing = buckets.find((bucket) => bucket.ledgerName === ledgerName);
+    if (existing) {
+      existing.amount = round2(existing.amount + amount);
+      existing.bills.push(...(bills || []));
+      existing.isPartyLedger = existing.isPartyLedger || isPartyLedger;
+    } else {
+      buckets.push({
+        ledgerName,
+        amount: round2(amount),
+        bills: [...(bills || [])],
+        isPartyLedger,
+      });
+    }
+  }
+
+  function ledgerBucketXml(bucket, indent) {
+    return ledgerEntryXml(
+      bucket.ledgerName,
+      bucket.amount,
+      bucket.amount < 0,
+      bucket.bills,
+      indent,
+      bucket.isPartyLedger,
+      "Agst Ref"
+    );
+  }
+
+  function sortLedgerBuckets(buckets, config) {
+    const ledgerOrder = [config.feeLedgerBlrName, config.feeLedgerDelName, config.otherChargesLedgerName, config.reimbursementLedgerName];
+    const rank = new Map();
+    ledgerOrder.filter(Boolean).forEach((name) => {
+      if (!rank.has(name)) rank.set(name, rank.size);
+    });
+    buckets.sort((a, b) => {
+      if ((a.amount < 0) !== (b.amount < 0)) return a.amount < 0 ? -1 : 1;
+      const aRank = rank.has(a.ledgerName) ? rank.get(a.ledgerName) : ledgerOrder.length;
+      const bRank = rank.has(b.ledgerName) ? rank.get(b.ledgerName) : ledgerOrder.length;
+      if (aRank !== bRank) return aRank - bRank;
+      return a.ledgerName.localeCompare(b.ledgerName);
+    });
   }
 
   function buildVoucherXml(settlement, config, index) {
@@ -409,12 +476,15 @@
     const delTotal = settlement.delBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
     const otherTotal = settlement.otherChargeBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
     const reimbursementTotal = settlement.reimbursementBills.reduce((sum, bill) => round2(sum + bill.amount), 0);
-    lines.push(...ledgerEntryXml(config.feeLedgerBlrName, blrTotal, true, settlement.blrBills, 10, true));
-    lines.push(...ledgerEntryXml(config.feeLedgerDelName, delTotal, true, settlement.delBills, 10, true));
+    const ledgerBuckets = [];
+    addLedgerBucket(ledgerBuckets, config.feeLedgerBlrName, blrTotal, settlement.blrBills);
+    addLedgerBucket(ledgerBuckets, config.feeLedgerDelName, delTotal, settlement.delBills);
+    addLedgerBucket(ledgerBuckets, config.otherChargesLedgerName, otherTotal, settlement.otherChargeBills);
+    addLedgerBucket(ledgerBuckets, config.reimbursementLedgerName, reimbursementTotal, settlement.reimbursementBills);
+    sortLedgerBuckets(ledgerBuckets, config);
+    ledgerBuckets.forEach((bucket) => lines.push(...ledgerBucketXml(bucket, 10)));
     lines.push(...ledgerEntryXml(config.tcsLedgerName, settlement.tcs, true, [], 10));
     lines.push(...ledgerEntryXml(config.tdsLedgerName, settlement.tds, true, [], 10));
-    lines.push(...ledgerEntryXml(config.otherChargesLedgerName, otherTotal, true, settlement.otherChargeBills, 10, true));
-    lines.push(...ledgerEntryXml(config.reimbursementLedgerName, reimbursementTotal, false, settlement.reimbursementBills, 10, true));
 
     const salesEntries = [config.b2bPartyLedgerName, config.partyLedgerName]
       .filter((ledgerName, index, list) => ledgerName && list.indexOf(ledgerName) === index && settlement.salesByLedger.has(ledgerName))
@@ -427,7 +497,7 @@
       const bills = settlement.orderBills
         .filter((bill) => bill.ledgerName === ledgerName)
         .map((bill) => ({ name: bill.orderId, amount: bill.amount }));
-      lines.push(...ledgerEntryXml(ledgerName, amount, false, bills, 10, true));
+      lines.push(...ledgerEntryXml(ledgerName, amount, false, bills, 10, true, "Agst Ref"));
     });
 
     const balance = round2(
