@@ -36,7 +36,7 @@
     partyLedgerName: "B2C Amazon Sales",
     b2bPartyLedgerName: "B2B Amazon Sales",
     partyLedgerPrefix: "Amazon B2C",
-    salesLedgerName: "Sales A/c",
+    salesLedgerName: "Sales A/c - Online",
     cgstLedgerName: "CGST",
     sgstLedgerName: "SGST",
     igstLedgerName: "IGST",

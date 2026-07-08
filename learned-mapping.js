@@ -9,7 +9,7 @@ window.AMAZON_TALLY_LEARNED_MAPPING = {
   partyLedgerMode: "auto",
   b2bPartyLedgerName: "B2B Amazon Sales",
   partyLedgerName: "B2C Amazon Sales",
-  salesLedgerName: "Sales A/c",
+  salesLedgerName: "Sales A/c - Online",
   cgstLedgerName: "CGST",
   sgstLedgerName: "SGST",
   igstLedgerName: "IGST",
