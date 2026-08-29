@@ -67,5 +67,12 @@ window.AMAZON_TALLY_LEARNED_MAPPING = {
     "97-4EPC-1TXD = Nothing Phone 4A 8/256",
     "BZ-UDQ5-843K = Nothing Phone 3A Lite 8/128 - Fresh",
     "GM-PEH8-HXVO = Nothing Phone 3A Lite 8/128 - Fresh",
+    "M6-6BCX-Y05Y = Samsung F70E 5G 4/128",
+    "OR-702H-NJXM = Oppo K14X 6/128",
+    "XS-SXQ7-3YUG = Nothing Phone 4B 8/128",
+    "NF-0Y8T-E460 = Nothing Phone 4B 8/128",
+    "K4-B7CI-T998 = Nothing Phone 4B 8/128",
+    "GB-47C9-SYWX = Nothing Phone 4B 8/256",
+    "Q7-5G1B-8I0N = Samsung Galaxy Buds 3 Pro - (SM-R630) - Vietnam - 85183000",
   ].join("\n"),
 };
