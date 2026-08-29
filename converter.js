@@ -351,6 +351,14 @@
     return config.partyLedgerName || DEFAULT_CONFIG.partyLedgerName;
   }
 
+  function sameLedgerName(left, right) {
+    return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
+  }
+
+  function isB2cPartyLedger(partyLedger, config) {
+    return sameLedgerName(partyLedger, config.partyLedgerName || DEFAULT_CONFIG.partyLedgerName);
+  }
+
   function buildStockName(record, config) {
     const sku = String(record.Sku || "").trim();
     const asin = String(record.Asin || "").trim();
@@ -463,14 +471,17 @@
         String(record["Invoice Amount"] || "").trim(),
       ].join("\u001f");
       const buyerName = String(record["Buyer Name"] || "").trim() || pdfAddress?.billingName || "";
-      const billToGstin = String(record["Customer Bill To Gstid"] || "").trim() || pdfAddress?.billingGstin || "";
-      const shipToGstin = String(record["Customer Ship To Gstid"] || "").trim() || pdfAddress?.shippingGstin || "";
+      const rawBillToGstin = String(record["Customer Bill To Gstid"] || "").trim() || pdfAddress?.billingGstin || "";
+      const rawShipToGstin = String(record["Customer Ship To Gstid"] || "").trim() || pdfAddress?.shippingGstin || "";
+      const b2cParty = isB2cPartyLedger(partyLedger, config);
+      const billToGstin = b2cParty ? "" : rawBillToGstin;
+      const shipToGstin = b2cParty ? "" : rawShipToGstin;
       const billToCity = String(record["Bill To City"] || "").trim();
       const billToState = titleCaseState(record["Bill To State"]);
       const billToCountry = tallyCountry(record["Bill To Country"]);
       const billToPostalCode = String(record["Bill To Postalcode"] || "").trim() || pdfAddress?.billingPostalCode || "";
       const shipToPostalCode = String(record["Ship To Postal Code"] || "").trim() || pdfAddress?.shippingPostalCode || "";
-      const isB2b = Boolean(buyerName || billToGstin || shipToGstin);
+      const isB2b = !b2cParty && Boolean(buyerName || billToGstin || shipToGstin || sameLedgerName(partyLedger, config.b2bPartyLedgerName));
 
       if (!invoiceNo) errors.push({ row, invoiceNo, severity: "Error", message: refund ? "Missing credit note number." : "Missing invoice number." });
       if (!invoiceDate) errors.push({ row, invoiceNo, severity: "Error", message: refund ? "Invalid or missing credit note date." : "Invalid or missing invoice date." });
@@ -539,7 +550,7 @@
         billToGstin,
         shipToGstin,
         isB2b,
-        gstRegistrationType: billToGstin || shipToGstin ? "Regular" : "Unregistered/Consumer",
+        gstRegistrationType: b2cParty || (!billToGstin && !shipToGstin) ? "Unregistered/Consumer" : "Regular",
         billToCity: billToCity || String(record["Ship To City"] || "").trim(),
         billToState: billToState || titleCaseState(record["Ship To State"]),
         billToCountry,
